@@ -1,5 +1,7 @@
 import calendar
+import os
 import sqlite3
+import sys
 from datetime import date, datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -10,8 +12,20 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-DB_PATH = Path("/app/data/turnario.db")
-STATIC_DIR = Path(__file__).parent / "static"
+if getattr(sys, "frozen", False):
+    BASE_DIR = Path(sys._MEIPASS)
+    APP_DATA_DIR = Path(sys.executable).parent / "data"
+    STATIC_DIR = BASE_DIR / "app" / "static"
+elif os.path.exists("/app/data"):
+    BASE_DIR = Path(__file__).parent
+    APP_DATA_DIR = Path("/app/data")
+    STATIC_DIR = BASE_DIR / "static"
+else:
+    BASE_DIR = Path(__file__).parent
+    APP_DATA_DIR = Path(__file__).parent.parent / "data"
+    STATIC_DIR = BASE_DIR / "static"
+
+DB_PATH = APP_DATA_DIR / "turnario.db"
 
 # Sequenza perpetua 32 giorni ancorata al 01/01/2027 (Diurno = C1)
 SEQUENZA_32 = [
@@ -121,8 +135,10 @@ def calcola_turno_giorno(d: date) -> dict:
 
 def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int] = None) -> int:
     """
-    Compila automaticamente i turni scoperti (min 2 Q + 4 V, di cui 1 Q + 1 V in TN)
-    bilanciando equamente TN e TOT cumulativi e rispettando salti (R), licenze (L) e turni già inseriti.
+    Compila automaticamente i turni scoperti (min 2 Q + 4 V, di cui 1 Q + 1 V in TN):
+    - Fase 1: dà priorità a chi è libero su entrambi i giorni consecutivi (D + N).
+    - Fase 2 (fallback): se un singolo giorno resta scoperto per ferie alternate/parziali,
+      completa quel singolo giorno con chi è libero in quella data.
     """
     dipendenti = [
         dict(r) for r in conn.execute(
@@ -188,10 +204,19 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
 
     nuove_assegnazioni = []
 
+    def registra(did: int, dt: str, mansione: str):
+        if (did, dt) not in assegnazioni:
+            assegnazioni[(did, dt)] = mansione
+            nuove_assegnazioni.append((did, dt, mansione))
+            conteggio_tot[did] += 1
+            if mansione == "TN":
+                conteggio_tn[did] += 1
+
     for blocco in blocchi:
         codice_turno = blocco[0]["turno_sez_d"]
         date_blocco = [b["data"] for b in blocco]
 
+        # --- FASE 1: Copertura con continuità sull'intero blocco (D + N) ---
         gia_q_t, gia_q_tn = set(), set()
         gia_v_t, gia_v_tn = set(), set()
 
@@ -205,18 +230,18 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
                 else:
                     (gia_v_tn if is_tn else gia_v_t).add(did)
 
-        gia_assegnati = gia_q_t | gia_q_tn | gia_v_t | gia_v_tn
+        gia_assegnati_blocco = gia_q_t | gia_q_tn | gia_v_t | gia_v_tn
 
-        def e_disponibile(dip_obj: dict) -> bool:
+        def libero_intero_blocco(dip_obj: dict) -> bool:
             if dip_obj["salto"] == codice_turno:
                 return False
             for dt in date_blocco:
-                if assegnazioni.get((dip_obj["id"], dt)) == "L":
+                if (dip_obj["id"], dt) in assegnazioni:
                     return False
             return True
 
-        disp_q = [d for d in dipendenti if d["qualifica"] == "Q" and d["id"] not in gia_assegnati and e_disponibile(d)]
-        disp_v = [d for d in dipendenti if d["qualifica"] == "V" and d["id"] not in gia_assegnati and e_disponibile(d)]
+        disp_q = [d for d in dipendenti if d["qualifica"] == "Q" and d["id"] not in gia_assegnati_blocco and libero_intero_blocco(d)]
+        disp_v = [d for d in dipendenti if d["qualifica"] == "V" and d["id"] not in gia_assegnati_blocco and libero_intero_blocco(d)]
 
         scelti_q_tn = list(gia_q_tn)
         scelti_q_t = list(gia_q_t)
@@ -230,8 +255,7 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             scelti_q_tn.append(scelto["id"])
             disp_q.remove(scelto)
 
-        tot_q_attuali = len(scelti_q_tn) + len(scelti_q_t)
-        while tot_q_attuali < 2 and disp_q:
+        while (len(scelti_q_tn) + len(scelti_q_t)) < 2 and disp_q:
             candidati_q_t = sorted(
                 disp_q,
                 key=lambda x: (0 if x["responsabile"] else 1, conteggio_tot[x["id"]], conteggio_tn[x["id"]], x["id"])
@@ -239,7 +263,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             scelto = candidati_q_t[0]
             scelti_q_t.append(scelto["id"])
             disp_q.remove(scelto)
-            tot_q_attuali += 1
 
         scelti_v_tn = list(gia_v_tn)
         scelti_v_t = list(gia_v_t)
@@ -253,8 +276,7 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             scelti_v_tn.append(scelto["id"])
             disp_v.remove(scelto)
 
-        tot_v_attuali = len(scelti_v_tn) + len(scelti_v_t)
-        while tot_v_attuali < 4 and disp_v:
+        while (len(scelti_v_tn) + len(scelti_v_t)) < 4 and disp_v:
             candidati_v_t = sorted(
                 disp_v,
                 key=lambda x: (conteggio_tot[x["id"]], conteggio_tn[x["id"]], x["id"])
@@ -262,21 +284,77 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             scelto = candidati_v_t[0]
             scelti_v_t.append(scelto["id"])
             disp_v.remove(scelto)
-            tot_v_attuali += 1
 
-        piano_blocco = (
-            [(did, "TN") for did in scelti_q_tn + scelti_v_tn] +
-            [(did, "T") for did in scelti_q_t + scelti_v_t]
-        )
-
-        for did, mansione in piano_blocco:
+        for did in scelti_q_tn + scelti_v_tn:
             for dt in date_blocco:
-                if (did, dt) not in assegnazioni:
-                    assegnazioni[(did, dt)] = mansione
-                    nuove_assegnazioni.append((did, dt, mansione))
-                    conteggio_tot[did] += 1
-                    if mansione == "TN":
-                        conteggio_tn[did] += 1
+                registra(did, dt, "TN")
+        for did in scelti_q_t + scelti_v_t:
+            for dt in date_blocco:
+                registra(did, dt, "T")
+
+        # --- FASE 2 (Fallback): Copertura singolo giorno se restano buchi per licenze alternate ---
+        for dt in date_blocco:
+            q_presenti = [
+                d for d in dipendenti
+                if d["qualifica"] == "Q" and assegnazioni.get((d["id"], dt)) in ("T", "TN", "UCL")
+            ]
+            v_presenti = [
+                d for d in dipendenti
+                if d["qualifica"] == "V" and assegnazioni.get((d["id"], dt)) in ("T", "TN", "UCL")
+            ]
+
+            has_q_tn = any(assegnazioni.get((d["id"], dt)) == "TN" for d in q_presenti)
+            has_v_tn = any(assegnazioni.get((d["id"], dt)) == "TN" for d in v_presenti)
+
+            # Chi è libero in questa singola data (no Salto R, nessuna assegnazione né L in data dt)
+            disp_q_giorno = [
+                d for d in dipendenti
+                if d["qualifica"] == "Q" and d["salto"] != codice_turno and (d["id"], dt) not in assegnazioni
+            ]
+            disp_v_giorno = [
+                d for d in dipendenti
+                if d["qualifica"] == "V" and d["salto"] != codice_turno and (d["id"], dt) not in assegnazioni
+            ]
+
+            # Completa Q mancanti nel singolo giorno
+            while len(q_presenti) < 2 and disp_q_giorno:
+                if not has_q_tn:
+                    candidati = sorted(
+                        disp_q_giorno,
+                        key=lambda x: (conteggio_tn[x["id"]], 0 if x["responsabile"] else 1, conteggio_tot[x["id"]], x["id"])
+                    )
+                    scelto = candidati[0]
+                    registra(scelto["id"], dt, "TN")
+                    has_q_tn = True
+                else:
+                    candidati = sorted(
+                        disp_q_giorno,
+                        key=lambda x: (0 if x["responsabile"] else 1, conteggio_tot[x["id"]], conteggio_tn[x["id"]], x["id"])
+                    )
+                    scelto = candidati[0]
+                    registra(scelto["id"], dt, "T")
+                q_presenti.append(scelto)
+                disp_q_giorno.remove(scelto)
+
+            # Completa V mancanti nel singolo giorno
+            while len(v_presenti) < 4 and disp_v_giorno:
+                if not has_v_tn:
+                    candidati = sorted(
+                        disp_v_giorno,
+                        key=lambda x: (conteggio_tn[x["id"]], conteggio_tot[x["id"]], x["id"])
+                    )
+                    scelto = candidati[0]
+                    registra(scelto["id"], dt, "TN")
+                    has_v_tn = True
+                else:
+                    candidati = sorted(
+                        disp_v_giorno,
+                        key=lambda x: (conteggio_tot[x["id"]], conteggio_tn[x["id"]], x["id"])
+                    )
+                    scelto = candidati[0]
+                    registra(scelto["id"], dt, "T")
+                v_presenti.append(scelto)
+                disp_v_giorno.remove(scelto)
 
     if nuove_assegnazioni:
         conn.executemany(
