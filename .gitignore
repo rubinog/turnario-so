@@ -1,0 +1,36 @@
+# Database SQLite e file temporanei WAL/SHM
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Backup locali
+*backup*.db
+
+# Python cache e virtual environment
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# Variabili d'ambiente e segreti
+.env
+.env.*
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# File di sistema (Windows / Linux / macOS)
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Turnario Sala Operativa - Sezione D</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .table-container {
+      max-height: calc(100vh - 108px);
+      overflow: auto;
+    }
+    th.sticky-col, td.sticky-col {
+      position: sticky;
+      left: 0;
+      z-index: 20;
+    }
+    thead tr:nth-child(1) th {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+    thead tr:nth-child(2) th {
+      position: sticky;
+      top: 28px;
+      z-index: 30;
+    }
+    thead th.sticky-col {
+      z-index: 40;
+    }
+    @media print {
+      @page { size: landscape; margin: 6mm; }
+      .no-print { display: none !important; }
+      .table-container { max-height: none; overflow: visible; border: none; }
+      body { font-size: 9px; background: white; }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans">
+
+  <!-- Navbar compatta -->
+  <header class="bg-red-800 text-white shadow-md no-print">
+    <div class="max-w-full mx-auto px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <span class="bg-white text-red-800 font-black px-2 py-0.5 rounded text-xs tracking-wider">VVF • SEZ. D</span>
+        <h1 class="text-base font-bold tracking-tight">Turnario Sala Operativa</h1>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="tab-turnario" onclick="switchTab('turnario')"
+          class="px-3 py-1 rounded font-semibold text-xs bg-white text-red-800 shadow">
+          Calendario Mensile
+        </button>
+        <button id="tab-dipendenti" onclick="switchTab('dipendenti')"
+          class="px-3 py-1 rounded font-semibold text-xs bg-red-900/70 text-white hover:bg-red-700">
+          Elenco Dipendenti & Conteggi
+        </button>
+        <span class="border-l border-red-600 h-4 mx-0.5"></span>
+        <a href="/api/backup" title="Scarica copia di backup del database SQLite"
+          class="px-3 py-1 rounded font-semibold text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 shadow transition-colors">
+          Backup DB
+        </a>
+        <button onclick="apriModaleRestore()" title="Ripristina un database da un file di backup (.db)"
+          class="px-3 py-1 rounded font-semibold text-xs bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow transition-colors">
+          Ripristina DB
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- SEZIONE 1: CALENDARIO MENSILE -->
+  <main id="view-turnario" class="p-2">
+    <!-- Barra controlli mese/anno + legenda compatta -->
+    <div class="bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 mb-2 flex flex-wrap items-center justify-between gap-2 no-print">
+      <div class="flex items-center gap-1.5">
+        <button onclick="cambiaMese(-1)" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 rounded font-bold text-xs">&larr;</button>
+        <select id="select-mese" onchange="caricaTurnario()" class="border border-slate-300 rounded px-2.5 py-1 font-semibold text-xs bg-white">
+          <option value="1">Gennaio</option>
+          <option value="2">Febbraio</option>
+          <option value="3">Marzo</option>
+          <option value="4">Aprile</option>
+          <option value="5">Maggio</option>
+          <option value="6">Giugno</option>
+          <option value="7">Luglio</option>
+          <option value="8">Agosto</option>
+          <option value="9">Settembre</option>
+          <option value="10">Ottobre</option>
+          <option value="11">Novembre</option>
+          <option value="12">Dicembre</option>
+        </select>
+        <input id="input-anno" type="number" value="2027" min="2020" max="2050" onchange="caricaTurnario()"
+          class="border border-slate-300 rounded px-2 py-1 w-20 font-semibold text-xs text-center" />
+        <button onclick="cambiaMese(1)" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 rounded font-bold text-xs">&rarr;</button>
+      </div>
+
+      <!-- Legenda rapida -->
+      <div class="flex flex-wrap items-center gap-2 text-[11px] font-medium">
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-red-700 text-amber-300 font-black rounded text-[10px]">Q★</span> Resp.</span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-red-700 text-white font-bold rounded text-[10px]">Q</span> Qual.</span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-neutral-900 text-white font-bold rounded text-[10px]">V</span> Vigile</span>
+        <span class="border-l border-slate-300 h-3.5"></span>
+        <span class="flex items-center gap-1"><span class="w-3 h-3 inline-block bg-emerald-600 rounded"></span> Min. 2Q+4V</span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-red-600 text-white font-bold rounded text-[10px]">-1Q -2V</span> Mancanti</span>
+        <span class="border-l border-slate-300 h-3.5"></span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-red-600 text-white font-bold rounded text-[10px]">R</span> Salto</span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px]">T</span></span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-sky-600 text-white font-bold rounded text-[10px]">TN</span></span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-purple-600 text-white font-bold rounded text-[10px]">UCL</span></span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-amber-500 text-white font-bold rounded text-[10px]">L</span> Licenza</span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px] ring-1 ring-red-500">T*</span> Straord.</span>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <button onclick="eseguiAutoCompila('mese')" title="Completa automaticamente i turni scoperti del mese selezionato"
+          class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
+          Auto-compila mese
+        </button>
+        <button onclick="eseguiAutoCompila('anno')" title="Completa automaticamente tutti i turni scoperti dell'intero anno"
+          class="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
+          Auto-compila anno
+        </button>
+        <button onclick="apriModaleSvuota()" class="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-800 border border-red-300 text-xs font-semibold rounded transition-colors">
+          Svuota mese
+        </button>
+        <button onclick="window.print()" class="px-2.5 py-1 bg-slate-800 text-white text-xs font-semibold rounded hover:bg-slate-700">
+          Stampa / PDF
+        </button>
+      </div>
+    </div>
+
+    <!-- Tabella Turnario Fit-to-Screen -->
+    <div class="table-container bg-white rounded-lg shadow border border-slate-300">
+      <table class="border-collapse w-full table-fixed text-xs select-none">
+        <thead id="turnario-head"></thead>
+        <tbody id="turnario-body"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <!-- MODALE CONFERMA SVUOTA MESE -->
+  <div id="modal-svuota" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
+      <div class="flex items-center gap-2 text-red-700 mb-2">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+        </svg>
+        <h3 class="font-bold text-base">Conferma svuotamento mese</h3>
+      </div>
+
+      <p class="text-sm text-slate-600 mb-3">
+        Stai per cancellare tutti i turni e le licenze (T, TN, UCL, L) per <strong id="modal-svuota-label" class="text-slate-900"></strong>. I salti (R) e gli altri mesi resteranno invariati.
+      </p>
+
+      <label class="block text-xs font-semibold text-slate-700 mb-1">
+        Per confermare, scrivi la parola <span class="font-mono bg-slate-100 text-red-700 px-1.5 py-0.5 rounded border border-slate-300">svuota</span> qui sotto:
+      </label>
+      <input id="input-conferma-svuota" type="text" autocomplete="off" placeholder="svuota"
+        oninput="verificaParolaSvuota()"
+        onkeydown="if(event.key === 'Enter') eseguiSvuotaMese()"
+        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono mb-4 focus:outline-none focus:ring-2 focus:ring-red-600" />
+
+      <div class="flex justify-end gap-2">
+        <button onclick="chiudiModaleSvuota()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
+          Annulla
+        </button>
+        <button id="btn-conferma-svuota" onclick="eseguiSvuotaMese()" disabled
+          class="px-4 py-1.5 rounded text-sm font-semibold bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-800 transition-opacity">
+          Conferma e svuota
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE RIPRISTINA BACKUP DB -->
+  <div id="modal-restore" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
+      <div class="flex items-center gap-2 text-amber-700 mb-2">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
+        </svg>
+        <h3 class="font-bold text-base text-slate-900">Ripristina Database da Backup</h3>
+      </div>
+
+      <p class="text-sm text-slate-600 mb-3">
+        Seleziona un file di backup <code class="bg-slate-100 px-1 rounded text-xs">.db</code> esportato in precedenza. Tutti i dati attuali verranno sovrascritti.
+      </p>
+
+      <input id="input-file-restore" type="file" accept=".db,.sqlite,.sqlite3"
+        onchange="verificaFormRestore()"
+        class="w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-white hover:file:bg-slate-700 border border-slate-300 rounded-lg p-1.5 mb-3 cursor-pointer" />
+
+      <label class="block text-xs font-semibold text-slate-700 mb-1">
+        Per confermare la sovrascrittura, scrivi <span class="font-mono bg-slate-100 text-red-700 px-1.5 py-0.5 rounded border border-slate-300">ripristina</span> qui sotto:
+      </label>
+      <input id="input-conferma-restore" type="text" autocomplete="off" placeholder="ripristina"
+        oninput="verificaFormRestore()"
+        onkeydown="if(event.key === 'Enter') eseguiRestoreDB()"
+        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono mb-4 focus:outline-none focus:ring-2 focus:ring-red-600" />
+
+      <div class="flex justify-end gap-2">
+        <button onclick="chiudiModaleRestore()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
+          Annulla
+        </button>
+        <button id="btn-conferma-restore" onclick="eseguiRestoreDB()" disabled
+          class="px-4 py-1.5 rounded text-sm font-semibold bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-800 transition-opacity">
+          Carica e ripristina
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEZIONE 2: ELENCO DIPENDENTI & CONTEGGI -->
+  <main id="view-dipendenti" class="p-4 hidden max-w-6xl mx-auto">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 md:col-span-2">
+        <h2 class="font-bold text-sm uppercase text-slate-500 mb-3">Aggiungi Operatore Sala Operativa</h2>
+        <form onsubmit="aggiungiDipendente(event)" class="flex flex-wrap items-center gap-2">
+          <input id="new-nome" type="text" placeholder="Cognome Nome (es. Rossi Mario)" required
+            class="border border-slate-300 rounded px-3 py-2 text-sm flex-1 min-w-[180px]" />
+          <select id="new-qualifica" onchange="toggleNewRespVisibility()" class="border border-slate-300 rounded px-3 py-2 text-sm font-semibold bg-white">
+            <option value="Q">Qualificato (Q)</option>
+            <option value="V" selected>Vigile (V)</option>
+          </select>
+          <label id="new-resp-wrapper" class="hidden items-center gap-1.5 text-xs font-semibold text-slate-700 bg-amber-50 border border-amber-300 px-2.5 py-2 rounded cursor-pointer">
+            <input id="new-responsabile" type="checkbox" class="rounded text-red-700 focus:ring-red-600" />
+            <span>Responsabile Sala</span>
+          </label>
+          <select id="new-salto" class="border border-slate-300 rounded px-3 py-2 text-sm font-semibold bg-white">
+            <option value="D1">Salto D1</option>
+            <option value="D2">Salto D2</option>
+            <option value="D3">Salto D3</option>
+            <option value="D4">Salto D4</option>
+            <option value="D5">Salto D5</option>
+            <option value="D6">Salto D6</option>
+            <option value="D7">Salto D7</option>
+            <option value="D8">Salto D8</option>
+          </select>
+          <button type="submit" class="bg-red-800 hover:bg-red-700 text-white font-semibold px-4 py-2 rounded text-sm">
+            + Aggiungi
+          </button>
+        </form>
+      </div>
+
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+        <h2 class="font-bold text-sm uppercase text-slate-500 mb-3">Periodo Conteggio Turni</h2>
+        <div class="flex gap-2">
+          <select id="stats-mese" onchange="caricaDipendenti()" class="border border-slate-300 rounded px-2 py-2 text-sm flex-1 bg-white">
+            <option value="">Tutto l'anno</option>
+            <option value="1">Gennaio</option>
+            <option value="2">Febbraio</option>
+            <option value="3">Marzo</option>
+            <option value="4">Aprile</option>
+            <option value="5">Maggio</option>
+            <option value="6">Giugno</option>
+            <option value="7">Luglio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Settembre</option>
+            <option value="10">Ottobre</option>
+            <option value="11">Novembre</option>
+            <option value="12">Dicembre</option>
+          </select>
+          <input id="stats-anno" type="number" value="2027" onchange="caricaDipendenti()"
+            class="border border-slate-300 rounded px-2 py-2 text-sm w-20 text-center font-semibold" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Legenda rapida badge conteggi -->
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2 text-xs text-slate-600">
+      <span>* Il <strong>Responsabile di Sala</strong> è escluso dal confronto min/max dei <strong>Turni Totali</strong> (partecipa solo al bilanciamento <strong>TN</strong>). Le licenze (<strong>L</strong>) non sono conteggiate.</span>
+      <div class="flex items-center gap-3">
+        <span class="flex items-center gap-1"><span class="px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 border border-emerald-400">Max</span> Più turni</span>
+        <span class="flex items-center gap-1"><span class="px-2 py-0.5 rounded font-bold bg-red-100 text-red-800 border border-red-400">Min</span> Meno turni</span>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <table class="w-full text-sm text-left border-collapse">
+        <thead class="bg-slate-800 text-white text-xs uppercase">
+          <tr>
+            <th class="px-4 py-3">Dipendente</th>
+            <th class="px-4 py-3 text-center">Qualifica</th>
+            <th class="px-4 py-3 text-center">Ruolo</th>
+            <th class="px-4 py-3 text-center">Salto</th>
+            <th class="px-4 py-3 text-center">Totale Turni</th>
+            <th class="px-4 py-3 text-center">T (Normale)</th>
+            <th class="px-4 py-3 text-center">TN (Notturno)</th>
+            <th class="px-4 py-3 text-center">UCL</th>
+            <th class="px-4 py-3 text-right">Stato</th>
+          </tr>
+        </thead>
+        <tbody id="dipendenti-body" class="divide-y divide-slate-200"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <script>
+    const CICLO_NORMALE = ["", "T", "TN", "UCL", "L"];
+    const CICLO_SALTO = ["", "T", "TN", "UCL"];
+    const TURNI_LAVORATIVI = new Set(["T", "TN", "UCL"]);
+    const MIN_Q = 2;
+    const MIN_V = 4;
+
+    const BADGE_STYLE = {
+      "T": "bg-emerald-600 text-white font-bold",
+      "TN": "bg-sky-600 text-white font-bold",
+      "UCL": "bg-purple-600 text-white font-bold",
+      "L": "bg-amber-500 text-white font-bold",
+    };
+
+    let statoTurnario = null;
+
+    function toggleNewRespVisibility() {
+      const q = document.getElementById("new-qualifica").value;
+      const wrap = document.getElementById("new-resp-wrapper");
+      const chk = document.getElementById("new-responsabile");
+      if (q === "Q") {
+        wrap.classList.remove("hidden");
+        wrap.classList.add("inline-flex");
+      } else {
+        wrap.classList.add("hidden");
+        wrap.classList.remove("inline-flex");
+        chk.checked = false;
+      }
+    }
+
+    function switchTab(tab) {
+      const isTurnario = tab === "turnario";
+      document.getElementById("view-turnario").classList.toggle("hidden", !isTurnario);
+      document.getElementById("view-dipendenti").classList.toggle("hidden", isTurnario);
+
+      document.getElementById("tab-turnario").className = isTurnario
+        ? "px-3 py-1 rounded font-semibold text-xs bg-white text-red-800 shadow"
+        : "px-3 py-1 rounded font-semibold text-xs bg-red-900/70 text-white hover:bg-red-700";
+
+      document.getElementById("tab-dipendenti").className = !isTurnario
+        ? "px-3 py-1 rounded font-semibold text-xs bg-white text-red-800 shadow"
+        : "px-3 py-1 rounded font-semibold text-xs bg-red-900/70 text-white hover:bg-red-700";
+
+      if (isTurnario) caricaTurnario();
+      else caricaDipendenti();
+    }
+
+    function cambiaMese(delta) {
+      const selMese = document.getElementById("select-mese");
+      const inpAnno = document.getElementById("input-anno");
+      let m = parseInt(selMese.value, 10) + delta;
+      let a = parseInt(inpAnno.value, 10);
+      if (m < 1) { m = 12; a -= 1; }
+      if (m > 12) { m = 1; a += 1; }
+      selMese.value = m;
+      inpAnno.value = a;
+      caricaTurnario();
+    }
+
+    async function eseguiAutoCompila(ambito) {
+      const anno = document.getElementById("input-anno").value;
+      const selMese = document.getElementById("select-mese");
+      const mese = selMese.value;
+      const nomeMese = selMese.options[selMese.selectedIndex].text;
+
+      const msg = ambito === "anno"
+        ? `Vuoi auto-compilare tutti i turni scoperti dell'intero anno ${anno}?\n\nLe assegnazioni, i salti (R) e le licenze (L) già presenti verranno rispettati.`
+        : `Vuoi auto-compilare i turni scoperti di ${nomeMese} ${anno}?\n\nLe assegnazioni, i salti (R) e le licenze (L) già presenti verranno rispettati.`;
+
+      if (!confirm(msg)) return;
+
+      const url = ambito === "anno"
+        ? `/api/autocompila/${anno}`
+        : `/api/autocompila/${anno}/${mese}`;
+
+      const res = await fetch(url, { method: "POST" });
+      if (res.ok) {
+        await caricaTurnario();
+      } else {
+        alert("Errore durante l'auto-compilazione.");
+      }
+    }
+
+    // --- GESTIONE MODALE SVUOTA MESE ---
+    function apriModaleSvuota() {
+      const selMese = document.getElementById("select-mese");
+      const nomeMese = selMese.options[selMese.selectedIndex].text;
+      const anno = document.getElementById("input-anno").value;
+
+      document.getElementById("modal-svuota-label").textContent = `${nomeMese} ${anno}`;
+      const inp = document.getElementById("input-conferma-svuota");
+      inp.value = "";
+      document.getElementById("btn-conferma-svuota").disabled = true;
+
+      const modal = document.getElementById("modal-svuota");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      setTimeout(() => inp.focus(), 50);
+    }
+
+    function chiudiModaleSvuota() {
+      const modal = document.getElementById("modal-svuota");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    function verificaParolaSvuota() {
+      const val = document.getElementById("input-conferma-svuota").value.trim().toLowerCase();
+      document.getElementById("btn-conferma-svuota").disabled = (val !== "svuota");
+    }
+
+    async function eseguiSvuotaMese() {
+      const val = document.getElementById("input-conferma-svuota").value.trim().toLowerCase();
+      if (val !== "svuota") return;
+
+      const anno = document.getElementById("input-anno").value;
+      const mese = document.getElementById("select-mese").value;
+
+      const res = await fetch(`/api/turnario/${anno}/${mese}`, { method: "DELETE" });
+      if (res.ok) {
+        chiudiModaleSvuota();
+        caricaTurnario();
+      } else {
+        alert("Errore durante lo svuotamento del mese.");
+      }
+    }
+
+    // --- GESTIONE MODALE RIPRISTINA BACKUP DB ---
+    function apriModaleRestore() {
+      document.getElementById("input-file-restore").value = "";
+      document.getElementById("input-conferma-restore").value = "";
+      document.getElementById("btn-conferma-restore").disabled = true;
+
+      const modal = document.getElementById("modal-restore");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+    }
+
+    function chiudiModaleRestore() {
+      const modal = document.getElementById("modal-restore");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    function verificaFormRestore() {
+      const fileInp = document.getElementById("input-file-restore");
+      const parola = document.getElementById("input-conferma-restore").value.trim().toLowerCase();
+      const valido = fileInp.files.length > 0 && parola === "ripristina";
+      document.getElementById("btn-conferma-restore").disabled = !valido;
+    }
+
+    async function eseguiRestoreDB() {
+      const fileInp = document.getElementById("input-file-restore");
+      const parola = document.getElementById("input-conferma-restore").value.trim().toLowerCase();
+      if (fileInp.files.length === 0 || parola !== "ripristina") return;
+
+      const btn = document.getElementById("btn-conferma-restore");
+      btn.disabled = true;
+      btn.textContent = "Ripristino in corso...";
+
+      try {
+        const formData = new FormData();
+        formData.append("file", fileInp.files[0]);
+
+        const res = await fetch("/api/restore", {
+          method: "POST",
+          body: formData
+        });
+
+        if (res.ok) {
+          chiudiModaleRestore();
+          alert("Database ripristinato con successo!");
+          caricaTurnario();
+          caricaDipendenti();
+        } else {
+          const err = await res.json();
+          alert(err.detail || "Errore durante il ripristino del database.");
+        }
+      } catch (e) {
+        alert("Errore di connessione durante il ripristino.");
+      } finally {
+        btn.textContent = "Carica e ripristina";
+        verificaFormRestore();
+      }
+    }
+
+    async function caricaTurnario() {
+      const anno = document.getElementById("input-anno").value;
+      const mese = document.getElementById("select-mese").value;
+      const res = await fetch(`/api/turnario/${anno}/${mese}`);
+      statoTurnario = await res.json();
+      renderTurnario();
+    }
+
+    function calcolaCoperturaGiorno(dataStr) {
+      let countQ = 0;
+      let countV = 0;
+      statoTurnario.dipendenti.forEach(dip => {
+        const val = statoTurnario.assegnazioni[`${dip.id}_${dataStr}`];
+        if (TURNI_LAVORATIVI.has(val)) {
+          if (dip.qualifica === "Q") countQ++;
+          else countV++;
+        }
+      });
+      const mancantiQ = Math.max(0, MIN_Q - countQ);
+      const mancantiV = Math.max(0, MIN_V - countV);
+      return {
+        countQ,
+        countV,
+        mancantiQ,
+        mancantiV,
+        completo: mancantiQ === 0 && mancantiV === 0
+      };
+    }
+
+    function renderBadgeCopertura(g) {
+      if (!g.turno_sez_d) {
+        return `<span class="text-slate-400">-</span>`;
+      }
+      const cop = calcolaCoperturaGiorno(g.data);
+      const labelTipo = g.tipo_sez_d ? `(${g.tipo_sez_d})` : "";
+      if (cop.completo) {
+        return `
+          <div class="leading-none py-1" title="Copertura completa: ${cop.countQ} Q e ${cop.countV} V">
+            <div class="font-extrabold text-emerald-950 text-[10.5px]">${g.turno_sez_d}${labelTipo}</div>
+          </div>`;
+      } else {
+        const parti = [];
+        if (cop.mancantiQ > 0) parti.push(`-${cop.mancantiQ}Q`);
+        if (cop.mancantiV > 0) parti.push(`-${cop.mancantiV}V`);
+        return `
+          <div class="leading-tight py-0.5" title="Attuali: ${cop.countQ} Q e ${cop.countV} V (Minimo richiesto: 2 Q e 4 V)">
+            <div class="font-extrabold text-red-950 text-[10.5px]">${g.turno_sez_d}${labelTipo}</div>
+            <div class="text-[9px] font-black text-red-700 tracking-tighter">${parti.join(" ")}</div>
+          </div>`;
+      }
+    }
+
+    function renderContenutoCella(val, isSalto) {
+      if (val) {
+        if (val === "L" && !isSalto) {
+          return `<span class="inline-block px-2 py-0.5 rounded text-[11px] ${BADGE_STYLE["L"]}" title="In Licenza">L</span>`;
+        }
+        if (isSalto && TURNI_LAVORATIVI.has(val)) {
+          return `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[11px] ring-1 ring-red-600 ${BADGE_STYLE[val]}" title="Straordinario su giorno di Salto (R)">${val}*</span>`;
+        }
+        if (TURNI_LAVORATIVI.has(val)) {
+          return `<span class="inline-block px-1.5 py-0.5 rounded text-[11px] ${BADGE_STYLE[val]}">${val}</span>`;
+        }
+      }
+      if (isSalto) {
+        return `<span class="inline-block px-2 py-0.5 bg-red-600 text-white font-bold rounded text-[11px]">R</span>`;
+      }
+      return `<span class="text-slate-300 text-sm">&middot;</span>`;
+    }
+
+    function getSoglie(mappaConteggi, escludiResponsabile = false) {
+      const listaFiltrata = escludiResponsabile
+        ? statoTurnario.dipendenti.filter(d => !d.responsabile)
+        : statoTurnario.dipendenti;
+      const vals = listaFiltrata.map(d => mappaConteggi[String(d.id)] || 0);
+      if (vals.length === 0) return { min: 0, max: 0 };
+      return { min: Math.min(...vals), max: Math.max(...vals) };
+    }
+
+    function applicaStileBadgeSemaforo(el, valore, min, max, testo, isEscluso = false) {
+      if (!el) return;
+      el.textContent = testo;
+      if (isEscluso) {
+        el.className = "text-[9.5px] px-1.5 py-0.5 rounded font-bold bg-slate-200 text-slate-700 border border-slate-400";
+        return;
+      }
+      if (min === max) {
+        el.className = "text-[9.5px] px-1.5 py-0.5 rounded font-bold bg-slate-100 text-slate-600 border border-slate-300";
+      } else if (valore === min) {
+        el.className = "text-[9.5px] px-1.5 py-0.5 rounded font-extrabold bg-red-100 text-red-800 border border-red-400";
+      } else if (valore >= max) {
+        el.className = "text-[9.5px] px-1.5 py-0.5 rounded font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-400";
+      } else {
+        el.className = "text-[9.5px] px-1.5 py-0.5 rounded font-semibold bg-slate-100 text-slate-600 border border-slate-200";
+      }
+    }
+
+    function aggiornaBadgeOperatori() {
+      const soglieTN = getSoglie(statoTurnario.tn_annuali, false);
+      const soglieTOT = getSoglie(statoTurnario.tot_annuali, true);
+
+      statoTurnario.dipendenti.forEach(dip => {
+        const idStr = String(dip.id);
+        const totTN = statoTurnario.tn_annuali[idStr] || 0;
+        const totTurni = statoTurnario.tot_annuali[idStr] || 0;
+
+        applicaStileBadgeSemaforo(
+          document.getElementById(`tn-badge-${dip.id}`),
+          totTN,
+          soglieTN.min,
+          soglieTN.max,
+          `${totTN} TN`,
+          false
+        );
+
+        applicaStileBadgeSemaforo(
+          document.getElementById(`tot-badge-${dip.id}`),
+          totTurni,
+          soglieTOT.min,
+          soglieTOT.max,
+          `${totTurni} TOT`,
+          Boolean(dip.responsabile)
+        );
+      });
+    }
+
+    function renderTurnario() {
+      const { giorni, dipendenti, assegnazioni } = statoTurnario;
+      const thead = document.getElementById("turnario-head");
+      const tbody = document.getElementById("turnario-body");
+
+      let row1 = `<tr><th class="sticky-col bg-slate-800 text-white px-2.5 py-1.5 text-left border border-slate-600 w-[255px]">Operatore</th>`;
+      let row2 = `<tr><th class="sticky-col bg-slate-700 text-slate-200 px-2.5 py-1 text-left border border-slate-600 text-[10.5px]">Copertura: 2 Q + 4 V</th>`;
+
+      giorni.forEach(g => {
+        const isSezD = Boolean(g.turno_sez_d);
+        const cop = isSezD ? calcolaCoperturaGiorno(g.data) : null;
+
+        let bgH1 = "bg-slate-800 text-slate-200";
+        let bgH2 = "bg-slate-100 text-slate-400";
+
+        if (isSezD) {
+          bgH1 = cop.completo ? "bg-emerald-700 text-white" : "bg-red-700 text-white";
+          bgH2 = cop.completo ? "bg-emerald-200 border-emerald-400" : "bg-red-200 border-red-400";
+        }
+
+        const gg = String(g.giorno).padStart(2, "0");
+
+        row1 += `<th id="h1-${g.data}" class="${bgH1} px-0.5 py-1.5 text-center border border-slate-400 text-xs">${gg}</th>`;
+        row2 += `<th id="h2-${g.data}" class="${bgH2} px-0.5 py-1 text-center border border-slate-300">${renderBadgeCopertura(g)}</th>`;
+      });
+      row1 += "</tr>";
+      row2 += "</tr>";
+      thead.innerHTML = row1 + row2;
+
+      let rowsHtml = "";
+      dipendenti.forEach(dip => {
+        let qBadge;
+        if (dip.qualifica === "Q" && dip.responsabile) {
+          qBadge = `<span class="text-[10px] bg-red-700 text-amber-300 px-1.5 py-0.5 rounded font-black shrink-0 ring-1 ring-amber-400" title="Responsabile Sala Operativa (Qualificato)">Q★</span>`;
+        } else if (dip.qualifica === "Q") {
+          qBadge = `<span class="text-[10px] bg-red-700 text-white px-1.5 py-0.5 rounded font-bold shrink-0" title="Qualificato (Casco Rosso)">Q</span>`;
+        } else {
+          qBadge = `<span class="text-[10px] bg-neutral-900 text-white px-1.5 py-0.5 rounded font-bold shrink-0" title="Vigile (Casco Nero)">V</span>`;
+        }
+
+        const totTitle = dip.responsabile
+          ? `Responsabile Sala: escluso dal confronto min/max dei turni totali`
+          : `Totale Turni (T + TN + UCL) fino a questo mese`;
+
+        rowsHtml += `<tr class="hover:bg-slate-50 h-8">`;
+        rowsHtml += `
+          <td class="sticky-col bg-white px-2.5 py-1.5 font-semibold text-slate-800 border border-slate-300">
+            <div class="flex items-center justify-between gap-1.5">
+              <div class="flex items-center gap-1.5 min-w-0">
+                ${qBadge}
+                <span class="truncate text-xs" title="${dip.nome}">${dip.nome}</span>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <span id="tn-badge-${dip.id}" title="Turni Notturni (TN) fino a questo mese">0 TN</span>
+                <span id="tot-badge-${dip.id}" title="${totTitle}">0 TOT</span>
+              </div>
+            </div>
+          </td>`;
+
+        giorni.forEach(g => {
+          const isSezD = Boolean(g.turno_sez_d);
+          const isSalto = g.turno_sez_d === dip.salto;
+          const key = `${dip.id}_${g.data}`;
+          const val = assegnazioni[key] || "";
+
+          const cellBg = isSalto
+            ? "bg-amber-100 hover:bg-amber-200"
+            : (isSezD ? "bg-amber-50/70 hover:bg-amber-100" : "bg-white hover:bg-slate-100");
+
+          const titleText = isSalto
+            ? `Salto (${dip.salto}) - Clicca per assegnare rientro in straordinario (T, TN, UCL)`
+            : `Clicca per assegnare T, TN, UCL o Licenza (L)`;
+
+          rowsHtml += `
+            <td onclick="ciclaCella(${dip.id}, '${g.data}', ${isSalto}, this)"
+              data-val="${val}"
+              title="${titleText}"
+              class="${cellBg} border border-slate-300 text-center py-1.5 cursor-pointer transition-colors">
+              ${renderContenutoCella(val, isSalto)}
+            </td>`;
+        });
+        rowsHtml += `</tr>`;
+      });
+
+      tbody.innerHTML = rowsHtml;
+      aggiornaBadgeOperatori();
+    }
+
+    function aggiornaIntestazioneGiorno(dataStr) {
+      const g = statoTurnario.giorni.find(item => item.data === dataStr);
+      if (!g || !g.turno_sez_d) return;
+
+      const cop = calcolaCoperturaGiorno(dataStr);
+      const h1 = document.getElementById(`h1-${dataStr}`);
+      const h2 = document.getElementById(`h2-${dataStr}`);
+
+      if (h1) {
+        h1.className = `${cop.completo ? "bg-emerald-700 text-white" : "bg-red-700 text-white"} px-0.5 py-1.5 text-center border border-slate-400 text-xs`;
+      }
+      if (h2) {
+        h2.className = `${cop.completo ? "bg-emerald-200 border-emerald-400" : "bg-red-200 border-red-400"} px-0.5 py-1 text-center border border-slate-300`;
+        h2.innerHTML = renderBadgeCopertura(g);
+      }
+    }
+
+    async function ciclaCella(dipId, dataStr, isSalto, tdEl) {
+      const attuale = tdEl.dataset.val || "";
+      const ciclo = isSalto ? CICLO_SALTO : CICLO_NORMALE;
+      const idxAttuale = ciclo.indexOf(attuale);
+      const nextIdx = idxAttuale === -1 ? 1 : (idxAttuale + 1) % ciclo.length;
+      const nuovaMansione = ciclo[nextIdx];
+
+      const idStr = String(dipId);
+
+      const vecchioTN = statoTurnario.tn_annuali[idStr] || 0;
+      if (attuale === "TN" && nuovaMansione !== "TN") {
+        statoTurnario.tn_annuali[idStr] = Math.max(0, vecchioTN - 1);
+      } else if (attuale !== "TN" && nuovaMansione === "TN") {
+        statoTurnario.tn_annuali[idStr] = vecchioTN + 1;
+      }
+
+      const eraTurnoLavorativo = TURNI_LAVORATIVI.has(attuale);
+      const eTurnoLavorativo = TURNI_LAVORATIVI.has(nuovaMansione);
+      const vecchioTOT = statoTurnario.tot_annuali[idStr] || 0;
+
+      if (!eraTurnoLavorativo && eTurnoLavorativo) {
+        statoTurnario.tot_annuali[idStr] = vecchioTOT + 1;
+      } else if (eraTurnoLavorativo && !eTurnoLavorativo) {
+        statoTurnario.tot_annuali[idStr] = Math.max(0, vecchioTOT - 1);
+      }
+
+      tdEl.dataset.val = nuovaMansione;
+      tdEl.innerHTML = renderContenutoCella(nuovaMansione, isSalto);
+
+      const key = `${dipId}_${dataStr}`;
+      if (nuovaMansione) statoTurnario.assegnazioni[key] = nuovaMansione;
+      else delete statoTurnario.assegnazioni[key];
+
+      aggiornaIntestazioneGiorno(dataStr);
+      aggiornaBadgeOperatori();
+
+      const res = await fetch("/api/assegna", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dipendente_id: dipId, data: dataStr, mansione: nuovaMansione })
+      });
+
+      if (!res.ok) {
+        alert("Operazione non consentita.");
+        caricaTurnario();
+      }
+    }
+
+    function renderBadgeConteggio(valore, min, max, attivo, isTotal = false, isEscluso = false) {
+      const baseFont = isTotal ? "font-black" : "font-bold";
+      if (isEscluso) {
+        return `<span class="inline-block min-w-[28px] px-2 py-0.5 rounded text-xs ${baseFont} bg-slate-200 text-slate-700 border border-slate-400" title="Responsabile di Sala (escluso dal confronto min/max)">${valore}</span>`;
+      }
+      if (!attivo || min === max) {
+        return `<span class="inline-block min-w-[28px] px-2 py-0.5 rounded text-xs ${baseFont} bg-slate-100 text-slate-700 border border-slate-300">${valore}</span>`;
+      }
+      if (valore === min) {
+        return `<span class="inline-block min-w-[28px] px-2 py-0.5 rounded text-xs ${baseFont} bg-red-100 text-red-800 border border-red-400" title="Minimo nel gruppo">${valore}</span>`;
+      }
+      if (valore >= max) {
+        return `<span class="inline-block min-w-[28px] px-2 py-0.5 rounded text-xs ${baseFont} bg-emerald-100 text-emerald-800 border border-emerald-400" title="Massimo nel gruppo">${valore}</span>`;
+      }
+      return `<span class="inline-block min-w-[28px] px-2 py-0.5 rounded text-xs ${baseFont} bg-slate-100 text-slate-700 border border-slate-200">${valore}</span>`;
+    }
+
+    async function caricaDipendenti() {
+      const anno = document.getElementById("stats-anno").value;
+      const mese = document.getElementById("stats-mese").value;
+      const url = mese ? `/api/dipendenti?anno=${anno}&mese=${mese}` : `/api/dipendenti?anno=${anno}`;
+      const res = await fetch(url);
+      const lista = await res.json();
+
+      const attivi = lista.filter(d => d.attivo);
+      const attiviNonResp = attivi.filter(d => !d.responsabile);
+
+      const totVals = attiviNonResp.map(d => d.conteggio_turni);
+      const tnVals = attivi.map(d => d.conteggio_tn);
+
+      const minTot = totVals.length ? Math.min(...totVals) : 0;
+      const maxTot = totVals.length ? Math.max(...totVals) : 0;
+      const minTN = tnVals.length ? Math.min(...tnVals) : 0;
+      const maxTN = tnVals.length ? Math.max(...tnVals) : 0;
+
+      const tbody = document.getElementById("dipendenti-body");
+      tbody.innerHTML = lista.map(d => `
+        <tr class="${d.attivo ? 'bg-white' : 'bg-slate-100 opacity-60'}">
+          <td class="px-4 py-2.5 font-semibold text-slate-800">
+            <div class="flex items-center gap-2">
+              <span>${d.nome}</span>
+              ${d.responsabile ? `<span class="text-[10px] bg-amber-100 text-amber-900 border border-amber-400 px-1.5 py-0.5 rounded font-bold">RESP. SALA</span>` : ""}
+            </div>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            <select onchange="cambiaQualifica(${d.id}, this.value)"
+              class="border border-slate-300 rounded px-2 py-1 text-xs font-bold ${d.qualifica === 'Q' ? 'bg-red-700 text-white' : 'bg-neutral-900 text-white'}">
+              <option value="Q" class="bg-white text-slate-900" ${d.qualifica === "Q" ? "selected" : ""}>Q (Qualificato)</option>
+              <option value="V" class="bg-white text-slate-900" ${d.qualifica === "V" ? "selected" : ""}>V (Vigile)</option>
+            </select>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            ${d.qualifica === "Q" ? `
+              <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                <input type="checkbox" ${d.responsabile ? "checked" : ""} onchange="cambiaResponsabile(${d.id}, this.checked)"
+                  class="rounded text-red-700 focus:ring-red-600" />
+                <span>Responsabile</span>
+              </label>
+            ` : `<span class="text-slate-300 text-xs">-</span>`}
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            <select onchange="cambiaSalto(${d.id}, this.value)"
+              class="border border-slate-300 rounded px-2 py-1 text-xs font-bold bg-slate-50">
+              ${["D1","D2","D3","D4","D5","D6","D7","D8"].map(s =>
+                `<option value="${s}" ${d.salto === s ? "selected" : ""}>${s}</option>`
+              ).join("")}
+            </select>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            ${renderBadgeConteggio(d.conteggio_turni, minTot, maxTot, d.attivo, true, Boolean(d.responsabile))}
+          </td>
+          <td class="px-4 py-2.5 text-center text-emerald-700 font-semibold">${d.conteggio_t}</td>
+          <td class="px-4 py-2.5 text-center">
+            ${renderBadgeConteggio(d.conteggio_tn, minTN, maxTN, d.attivo, false, false)}
+          </td>
+          <td class="px-4 py-2.5 text-center text-purple-700 font-semibold">${d.conteggio_ucl}</td>
+          <td class="px-4 py-2.5 text-right">
+            <button onclick="toggleAttivo(${d.id}, ${!d.attivo})"
+              class="text-xs px-2.5 py-1 rounded font-semibold ${d.attivo ? 'bg-slate-200 hover:bg-red-100 text-slate-700 hover:text-red-700' : 'bg-emerald-100 text-emerald-800'}">
+              ${d.attivo ? "Attivo" : "Riattiva"}
+            </button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function aggiungiDipendente(e) {
+      e.preventDefault();
+      const nome = document.getElementById("new-nome").value;
+      const qualifica = document.getElementById("new-qualifica").value;
+      const responsabile = qualifica === "Q" ? document.getElementById("new-responsabile").checked : false;
+      const salto = document.getElementById("new-salto").value;
+      const res = await fetch("/api/dipendenti", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, qualifica, responsabile, salto })
+      });
+      if (res.ok) {
+        document.getElementById("new-nome").value = "";
+        document.getElementById("new-responsabile").checked = false;
+        caricaDipendenti();
+      } else {
+        const err = await res.json();
+        alert(err.detail || "Errore inserimento");
+      }
+    }
+
+    async function cambiaQualifica(id, nuovaQualifica) {
+      await fetch(`/api/dipendenti/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qualifica: nuovaQualifica })
+      });
+      caricaDipendenti();
+    }
+
+    async function cambiaResponsabile(id, isResponsabile) {
+      await fetch(`/api/dipendenti/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ responsabile: isResponsabile })
+      });
+      caricaDipendenti();
+    }
+
+    async function cambiaSalto(id, nuovoSalto) {
+      await fetch(`/api/dipendenti/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ salto: nuovoSalto })
+      });
+      caricaDipendenti();
+    }
+
+    async function toggleAttivo(id, attivo) {
+      await fetch(`/api/dipendenti/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ attivo })
+      });
+      caricaDipendenti();
+    }
+
+    caricaTurnario();
+  </script>
+</body>
+</html>

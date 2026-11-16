@@ -1,0 +1,11 @@
+services:
+  turnario-so:
+    build: .
+    container_name: turnario-so
+    restart: unless-stopped
+    ports:
+      - "8088:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Europe/Rome
