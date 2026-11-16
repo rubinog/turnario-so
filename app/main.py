@@ -46,6 +46,31 @@ def get_db():
     return conn
 
 
+def calcola_turno_giorno(d: date) -> dict:
+    """Restituisce i codici Diurno/Notturno e l'eventuale turno della Sezione D."""
+    delta_d = (d - ANCHOR_DATE).days
+    diurno = SEQUENZA_32[delta_d % 32]
+    notturno = SEQUENZA_32[(delta_d - 1) % 32]
+
+    turno_sez_d = None
+    tipo_sez_d = None
+    if diurno.startswith("D"):
+        turno_sez_d = diurno
+        tipo_sez_d = "D"
+    elif notturno.startswith("D"):
+        turno_sez_d = notturno
+        tipo_sez_d = "N"
+
+    return {
+        "data": d.isoformat(),
+        "giorno": d.day,
+        "diurno": diurno,
+        "notturno": notturno,
+        "turno_sez_d": turno_sez_d,
+        "tipo_sez_d": tipo_sez_d,
+    }
+
+
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_db() as conn:
@@ -102,43 +127,32 @@ def init_db():
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_assegnazioni_data ON assegnazioni(data);")
 
+        # Bonifica automatica: converte eventuali 'TN' assegnati per errore su giorni non notturni in 'T'
+        tn_rows = conn.execute("SELECT id, data FROM assegnazioni WHERE mansione = 'TN'").fetchall()
+        ids_da_convertire = []
+        for r in tn_rows:
+            try:
+                info = calcola_turno_giorno(date.fromisoformat(r["data"]))
+                if info["tipo_sez_d"] != "N":
+                    ids_da_convertire.append((r["id"],))
+            except ValueError:
+                pass
+        if ids_da_convertire:
+            conn.executemany("UPDATE assegnazioni SET mansione = 'T' WHERE id = ?", ids_da_convertire)
+
 
 @app.on_event("startup")
 def startup_event():
     init_db()
 
 
-def calcola_turno_giorno(d: date) -> dict:
-    """Restituisce i codici Diurno/Notturno e l'eventuale turno della Sezione D."""
-    delta_d = (d - ANCHOR_DATE).days
-    diurno = SEQUENZA_32[delta_d % 32]
-    notturno = SEQUENZA_32[(delta_d - 1) % 32]
-
-    turno_sez_d = None
-    tipo_sez_d = None
-    if diurno.startswith("D"):
-        turno_sez_d = diurno
-        tipo_sez_d = "D"
-    elif notturno.startswith("D"):
-        turno_sez_d = notturno
-        tipo_sez_d = "N"
-
-    return {
-        "data": d.isoformat(),
-        "giorno": d.day,
-        "diurno": diurno,
-        "notturno": notturno,
-        "turno_sez_d": turno_sez_d,
-        "tipo_sez_d": tipo_sez_d,
-    }
-
-
 def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int] = None) -> int:
     """
-    Compila automaticamente i turni scoperti (min 2 Q + 4 V, di cui 1 Q + 1 V in TN):
-    - Fase 1: dà priorità a chi è libero su entrambi i giorni consecutivi (D + N).
-    - Fase 2 (fallback): se un singolo giorno resta scoperto per ferie alternate/parziali,
-      completa quel singolo giorno con chi è libero in quella data.
+    Compila automaticamente i turni scoperti (min 2 Q + 4 V):
+    - Sul turno Diurno (D): tutti i presenti ricevono 'T' (o restano con la mansione già inserita).
+    - Sul turno Notturno (N): 1 Q e 1 V ricevono 'TN', gli altri 'T'.
+    - Fase 1: priorità a chi è libero su entrambi i giorni consecutivi (D + N).
+    - Fase 2 (fallback): completa eventuali buchi su singolo giorno dovuti a ferie alternate.
     """
     dipendenti = [
         dict(r) for r in conn.execute(
@@ -215,6 +229,7 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
     for blocco in blocchi:
         codice_turno = blocco[0]["turno_sez_d"]
         date_blocco = [b["data"] for b in blocco]
+        blocco_ha_notte = any(b["tipo_sez_d"] == "N" for b in blocco)
 
         # --- FASE 1: Copertura con continuità sull'intero blocco (D + N) ---
         gia_q_t, gia_q_tn = set(), set()
@@ -246,7 +261,8 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
         scelti_q_tn = list(gia_q_tn)
         scelti_q_t = list(gia_q_t)
 
-        if len(scelti_q_tn) < 1 and disp_q:
+        # Sceglie 1 Q per il notturno SOLO se il blocco include una notte (N)
+        if blocco_ha_notte and len(scelti_q_tn) < 1 and disp_q:
             candidati_q_tn = sorted(
                 disp_q,
                 key=lambda x: (conteggio_tn[x["id"]], 0 if x["responsabile"] else 1, conteggio_tot[x["id"]], x["id"])
@@ -267,7 +283,8 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
         scelti_v_tn = list(gia_v_tn)
         scelti_v_t = list(gia_v_t)
 
-        if len(scelti_v_tn) < 1 and disp_v:
+        # Sceglie 1 V per il notturno SOLO se il blocco include una notte (N)
+        if blocco_ha_notte and len(scelti_v_tn) < 1 and disp_v:
             candidati_v_tn = sorted(
                 disp_v,
                 key=lambda x: (conteggio_tn[x["id"]], conteggio_tot[x["id"]], x["id"])
@@ -285,15 +302,20 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             scelti_v_t.append(scelto["id"])
             disp_v.remove(scelto)
 
-        for did in scelti_q_tn + scelti_v_tn:
-            for dt in date_blocco:
-                registra(did, dt, "TN")
-        for did in scelti_q_t + scelti_v_t:
-            for dt in date_blocco:
+        # Assegna 'TN' esclusivamente sul giorno Notturno (N) e 'T' sul giorno Diurno (D)
+        for b_info in blocco:
+            dt = b_info["data"]
+            is_notte = (b_info["tipo_sez_d"] == "N")
+            for did in scelti_q_tn + scelti_v_tn:
+                registra(did, dt, "TN" if is_notte else "T")
+            for did in scelti_q_t + scelti_v_t:
                 registra(did, dt, "T")
 
         # --- FASE 2 (Fallback): Copertura singolo giorno se restano buchi per licenze alternate ---
-        for dt in date_blocco:
+        for b_info in blocco:
+            dt = b_info["data"]
+            is_notte = (b_info["tipo_sez_d"] == "N")
+
             q_presenti = [
                 d for d in dipendenti
                 if d["qualifica"] == "Q" and assegnazioni.get((d["id"], dt)) in ("T", "TN", "UCL")
@@ -306,7 +328,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             has_q_tn = any(assegnazioni.get((d["id"], dt)) == "TN" for d in q_presenti)
             has_v_tn = any(assegnazioni.get((d["id"], dt)) == "TN" for d in v_presenti)
 
-            # Chi è libero in questa singola data (no Salto R, nessuna assegnazione né L in data dt)
             disp_q_giorno = [
                 d for d in dipendenti
                 if d["qualifica"] == "Q" and d["salto"] != codice_turno and (d["id"], dt) not in assegnazioni
@@ -316,9 +337,8 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
                 if d["qualifica"] == "V" and d["salto"] != codice_turno and (d["id"], dt) not in assegnazioni
             ]
 
-            # Completa Q mancanti nel singolo giorno
             while len(q_presenti) < 2 and disp_q_giorno:
-                if not has_q_tn:
+                if is_notte and not has_q_tn:
                     candidati = sorted(
                         disp_q_giorno,
                         key=lambda x: (conteggio_tn[x["id"]], 0 if x["responsabile"] else 1, conteggio_tot[x["id"]], x["id"])
@@ -336,9 +356,8 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
                 q_presenti.append(scelto)
                 disp_q_giorno.remove(scelto)
 
-            # Completa V mancanti nel singolo giorno
             while len(v_presenti) < 4 and disp_v_giorno:
-                if not has_v_tn:
+                if is_notte and not has_v_tn:
                     candidati = sorted(
                         disp_v_giorno,
                         key=lambda x: (conteggio_tn[x["id"]], conteggio_tot[x["id"]], x["id"])
@@ -564,6 +583,13 @@ def salva_assegnazione(payload: AssegnazioneInput):
         raise HTTPException(status_code=400, detail="Formato data non valido")
 
     info_giorno = calcola_turno_giorno(d)
+
+    # TN consentito esclusivamente nei giorni con turno Notturno (N) della Sezione D
+    if payload.mansione == "TN" and info_giorno["tipo_sez_d"] != "N":
+        raise HTTPException(
+            status_code=400,
+            detail="Il turno notturno (TN) può essere assegnato solo nei giorni con turno Notturno (N)."
+        )
 
     with get_db() as conn:
         dip = conn.execute(

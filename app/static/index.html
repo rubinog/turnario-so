@@ -104,18 +104,18 @@
         <span class="border-l border-slate-300 h-3.5"></span>
         <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-red-600 text-white font-bold rounded text-[10px]">R</span> Salto</span>
         <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px]">T</span></span>
-        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-sky-600 text-white font-bold rounded text-[10px]">TN</span></span>
+        <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-sky-600 text-white font-bold rounded text-[10px]">TN</span> (solo N)</span>
         <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-purple-600 text-white font-bold rounded text-[10px]">UCL</span></span>
         <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-amber-500 text-white font-bold rounded text-[10px]">L</span> Licenza</span>
         <span class="flex items-center gap-1"><span class="px-1.5 py-0.5 bg-emerald-600 text-white font-bold rounded text-[10px] ring-1 ring-red-500">T*</span> Straord.</span>
       </div>
 
       <div class="flex items-center gap-1.5">
-        <button onclick="eseguiAutoCompila('mese')" title="Completa automaticamente i turni scoperti del mese selezionato"
+        <button onclick="apriModaleAutoCompila('mese')" title="Completa automaticamente i turni scoperti del mese selezionato"
           class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
           Auto-compila mese
         </button>
-        <button onclick="eseguiAutoCompila('anno')" title="Completa automaticamente tutti i turni scoperti dell'intero anno"
+        <button onclick="apriModaleAutoCompila('anno')" title="Completa automaticamente tutti i turni scoperti dell'intero anno"
           class="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
           Auto-compila anno
         </button>
@@ -136,6 +136,33 @@
       </table>
     </div>
   </main>
+
+  <!-- MODALE CONFERMA AUTO-COMPILAZIONE -->
+  <div id="modal-autocompila" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
+      <div id="modal-ac-header" class="flex items-center gap-2 text-emerald-700 mb-2">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/>
+        </svg>
+        <h3 id="modal-ac-title" class="font-bold text-base">Conferma auto-compilazione</h3>
+      </div>
+
+      <p id="modal-ac-body" class="text-sm text-slate-600 mb-2"></p>
+      <p class="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">
+        Le assegnazioni manuali, i salti (<strong>R</strong>) e le licenze (<strong>L</strong>) già presenti verranno rispettati.
+      </p>
+
+      <div class="flex justify-end gap-2">
+        <button onclick="chiudiModaleAutoCompila()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
+          Annulla
+        </button>
+        <button id="btn-conferma-ac" onclick="confermaAutoCompila()"
+          class="px-4 py-1.5 rounded text-sm font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors">
+          Avvia compilazione
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODALE CONFERMA SVUOTA MESE -->
   <div id="modal-svuota" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
@@ -204,6 +231,23 @@
         <button id="btn-conferma-restore" onclick="eseguiRestoreDB()" disabled
           class="px-4 py-1.5 rounded text-sm font-semibold bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-800 transition-opacity">
           Carica e ripristina
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODALE NOTIFICA / AVVISO CUSTOM (SOSTITUISCE ALERT NATIVO) -->
+  <div id="modal-alert" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
+    <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-sm w-full p-5">
+      <div id="modal-alert-header" class="flex items-center gap-2 text-slate-800 mb-2">
+        <span id="modal-alert-icon"></span>
+        <h3 id="modal-alert-title" class="font-bold text-base">Avviso</h3>
+      </div>
+      <p id="modal-alert-msg" class="text-sm text-slate-600 mb-4"></p>
+      <div class="flex justify-end">
+        <button id="btn-chiudi-alert" onclick="chiudiAlert()"
+          class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-white">
+          OK
         </button>
       </div>
     </div>
@@ -295,8 +339,15 @@
   </main>
 
   <script>
-    const CICLO_NORMALE = ["", "T", "TN", "UCL", "L"];
-    const CICLO_SALTO = ["", "T", "TN", "UCL"];
+    // Cicli contestuali al tipo di giorno:
+    // - Turno Notturno (N): include TN
+    // - Turno Diurno (D) / altri giorni: esclude TN
+    // - Salto (R): solo straordinari (T, TN se notte, UCL), mai L
+    const CICLO_NOTTE_NORMALE = ["", "T", "TN", "UCL", "L"];
+    const CICLO_NOTTE_SALTO   = ["", "T", "TN", "UCL"];
+    const CICLO_DIURNO_NORMALE = ["", "T", "UCL", "L"];
+    const CICLO_DIURNO_SALTO   = ["", "T", "UCL"];
+
     const TURNI_LAVORATIVI = new Set(["T", "TN", "UCL"]);
     const MIN_Q = 2;
     const MIN_V = 4;
@@ -309,6 +360,42 @@
     };
 
     let statoTurnario = null;
+    let ambitoAutoCompilaCorrente = "mese";
+
+    function mostraAlert(titolo, messaggio, tipo = "error") {
+      const header = document.getElementById("modal-alert-header");
+      const icon = document.getElementById("modal-alert-icon");
+      document.getElementById("modal-alert-title").textContent = titolo;
+      document.getElementById("modal-alert-msg").textContent = messaggio;
+
+      if (tipo === "success") {
+        header.className = "flex items-center gap-2 text-emerald-700 mb-2";
+        icon.innerHTML = `<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`;
+      } else {
+        header.className = "flex items-center gap-2 text-red-700 mb-2";
+        icon.innerHTML = `<svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>`;
+      }
+
+      const modal = document.getElementById("modal-alert");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      setTimeout(() => document.getElementById("btn-chiudi-alert").focus(), 30);
+    }
+
+    function chiudiAlert() {
+      const modal = document.getElementById("modal-alert");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        chiudiModaleAutoCompila();
+        chiudiModaleSvuota();
+        chiudiModaleRestore();
+        chiudiAlert();
+      }
+    });
 
     function toggleNewRespVisibility() {
       const q = document.getElementById("new-qualifica").value;
@@ -353,31 +440,71 @@
       caricaTurnario();
     }
 
-    async function eseguiAutoCompila(ambito) {
+    function apriModaleAutoCompila(ambito) {
+      ambitoAutoCompilaCorrente = ambito;
       const anno = document.getElementById("input-anno").value;
       const selMese = document.getElementById("select-mese");
-      const mese = selMese.value;
       const nomeMese = selMese.options[selMese.selectedIndex].text;
 
-      const msg = ambito === "anno"
-        ? `Vuoi auto-compilare tutti i turni scoperti dell'intero anno ${anno}?\n\nLe assegnazioni, i salti (R) e le licenze (L) già presenti verranno rispettati.`
-        : `Vuoi auto-compilare i turni scoperti di ${nomeMese} ${anno}?\n\nLe assegnazioni, i salti (R) e le licenze (L) già presenti verranno rispettati.`;
+      const header = document.getElementById("modal-ac-header");
+      const title = document.getElementById("modal-ac-title");
+      const body = document.getElementById("modal-ac-body");
+      const btn = document.getElementById("btn-conferma-ac");
 
-      if (!confirm(msg)) return;
+      if (ambito === "anno") {
+        header.className = "flex items-center gap-2 text-indigo-700 mb-2";
+        title.textContent = `Auto-compila anno ${anno}`;
+        body.innerHTML = `Vuoi compilare automaticamente tutti i turni scoperti dell'intero anno <strong class="text-slate-900">${anno}</strong>?`;
+        btn.className = "px-4 py-1.5 rounded text-sm font-semibold bg-indigo-700 hover:bg-indigo-800 text-white transition-colors";
+      } else {
+        header.className = "flex items-center gap-2 text-emerald-700 mb-2";
+        title.textContent = `Auto-compila ${nomeMese} ${anno}`;
+        body.innerHTML = `Vuoi compilare automaticamente i turni scoperti di <strong class="text-slate-900">${nomeMese} ${anno}</strong>?`;
+        btn.className = "px-4 py-1.5 rounded text-sm font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors";
+      }
 
-      const url = ambito === "anno"
+      btn.disabled = false;
+      btn.textContent = "Avvia compilazione";
+
+      const modal = document.getElementById("modal-autocompila");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      setTimeout(() => btn.focus(), 30);
+    }
+
+    function chiudiModaleAutoCompila() {
+      const modal = document.getElementById("modal-autocompila");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    async function confermaAutoCompila() {
+      const anno = document.getElementById("input-anno").value;
+      const mese = document.getElementById("select-mese").value;
+      const btn = document.getElementById("btn-conferma-ac");
+
+      btn.disabled = true;
+      btn.textContent = "Compilazione in corso...";
+
+      const url = ambitoAutoCompilaCorrente === "anno"
         ? `/api/autocompila/${anno}`
         : `/api/autocompila/${anno}/${mese}`;
 
-      const res = await fetch(url, { method: "POST" });
-      if (res.ok) {
-        await caricaTurnario();
-      } else {
-        alert("Errore durante l'auto-compilazione.");
+      try {
+        const res = await fetch(url, { method: "POST" });
+        if (res.ok) {
+          chiudiModaleAutoCompila();
+          await caricaTurnario();
+        } else {
+          chiudiModaleAutoCompila();
+          mostraAlert("Errore", "Impossibile completare l'auto-compilazione.", "error");
+        }
+      } catch (e) {
+        chiudiModaleAutoCompila();
+        mostraAlert("Errore di rete", "Connessione al server non riuscita.", "error");
       }
     }
 
-    // --- GESTIONE MODALE SVUOTA MESE ---
     function apriModaleSvuota() {
       const selMese = document.getElementById("select-mese");
       const nomeMese = selMese.options[selMese.selectedIndex].text;
@@ -417,11 +544,11 @@
         chiudiModaleSvuota();
         caricaTurnario();
       } else {
-        alert("Errore durante lo svuotamento del mese.");
+        chiudiModaleSvuota();
+        mostraAlert("Errore", "Errore durante lo svuotamento del mese.", "error");
       }
     }
 
-    // --- GESTIONE MODALE RIPRISTINA BACKUP DB ---
     function apriModaleRestore() {
       document.getElementById("input-file-restore").value = "";
       document.getElementById("input-conferma-restore").value = "";
@@ -465,15 +592,17 @@
 
         if (res.ok) {
           chiudiModaleRestore();
-          alert("Database ripristinato con successo!");
+          mostraAlert("Ripristino completato", "Il database è stato ripristinato con successo dal file di backup.", "success");
           caricaTurnario();
           caricaDipendenti();
         } else {
           const err = await res.json();
-          alert(err.detail || "Errore durante il ripristino del database.");
+          chiudiModaleRestore();
+          mostraAlert("Errore ripristino", err.detail || "File di backup non valido.", "error");
         }
       } catch (e) {
-        alert("Errore di connessione durante il ripristino.");
+        chiudiModaleRestore();
+        mostraAlert("Errore di rete", "Connessione al server non riuscita durante il ripristino.", "error");
       } finally {
         btn.textContent = "Carica e ripristina";
         verificaFormRestore();
@@ -667,6 +796,7 @@
 
         giorni.forEach(g => {
           const isSezD = Boolean(g.turno_sez_d);
+          const isNotte = g.tipo_sez_d === "N";
           const isSalto = g.turno_sez_d === dip.salto;
           const key = `${dip.id}_${g.data}`;
           const val = assegnazioni[key] || "";
@@ -675,12 +805,19 @@
             ? "bg-amber-100 hover:bg-amber-200"
             : (isSezD ? "bg-amber-50/70 hover:bg-amber-100" : "bg-white hover:bg-slate-100");
 
-          const titleText = isSalto
-            ? `Salto (${dip.salto}) - Clicca per assegnare rientro in straordinario (T, TN, UCL)`
-            : `Clicca per assegnare T, TN, UCL o Licenza (L)`;
+          let titleText;
+          if (isSalto) {
+            titleText = isNotte
+              ? `Salto (${dip.salto}) - Clicca per straordinario notturno (T, TN, UCL)`
+              : `Salto (${dip.salto}) - Clicca per straordinario diurno (T, UCL)`;
+          } else {
+            titleText = isNotte
+              ? `Turno Notturno (N) - Clicca per assegnare T, TN, UCL o Licenza (L)`
+              : `Turno Diurno - Clicca per assegnare T, UCL o Licenza (L)`;
+          }
 
           rowsHtml += `
-            <td onclick="ciclaCella(${dip.id}, '${g.data}', ${isSalto}, this)"
+            <td onclick="ciclaCella(${dip.id}, '${g.data}', ${isSalto}, ${isNotte}, this)"
               data-val="${val}"
               title="${titleText}"
               class="${cellBg} border border-slate-300 text-center py-1.5 cursor-pointer transition-colors">
@@ -711,9 +848,15 @@
       }
     }
 
-    async function ciclaCella(dipId, dataStr, isSalto, tdEl) {
+    async function ciclaCella(dipId, dataStr, isSalto, isNotte, tdEl) {
       const attuale = tdEl.dataset.val || "";
-      const ciclo = isSalto ? CICLO_SALTO : CICLO_NORMALE;
+      let ciclo;
+      if (isNotte) {
+        ciclo = isSalto ? CICLO_NOTTE_SALTO : CICLO_NOTTE_NORMALE;
+      } else {
+        ciclo = isSalto ? CICLO_DIURNO_SALTO : CICLO_DIURNO_NORMALE;
+      }
+
       const idxAttuale = ciclo.indexOf(attuale);
       const nextIdx = idxAttuale === -1 ? 1 : (idxAttuale + 1) % ciclo.length;
       const nuovaMansione = ciclo[nextIdx];
@@ -754,7 +897,7 @@
       });
 
       if (!res.ok) {
-        alert("Operazione non consentita.");
+        mostraAlert("Operazione non consentita", "Impossibile salvare la modifica sul server.", "error");
         caricaTurnario();
       }
     }
@@ -862,7 +1005,7 @@
         caricaDipendenti();
       } else {
         const err = await res.json();
-        alert(err.detail || "Errore inserimento");
+        mostraAlert("Errore inserimento", err.detail || "Impossibile aggiungere l'operatore.", "error");
       }
     }
 
