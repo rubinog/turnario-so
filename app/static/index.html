@@ -56,13 +56,10 @@
           Elenco Dipendenti & Conteggi
         </button>
         <span class="border-l border-red-600 h-4 mx-0.5"></span>
-        <a href="/api/backup" title="Scarica copia di backup del database SQLite"
+        <!-- Tasto unico Gestisci DB -->
+        <button onclick="apriModaleGestisciDB()" title="Gestione Database (Backup e Ripristino)"
           class="px-3 py-1 rounded font-semibold text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 shadow transition-colors">
-          Backup DB
-        </a>
-        <button onclick="apriModaleRestore()" title="Ripristina un database da un file di backup (.db)"
-          class="px-3 py-1 rounded font-semibold text-xs bg-slate-900 hover:bg-slate-800 text-white border border-slate-700 shadow transition-colors">
-          Ripristina DB
+          Gestisci DB
         </button>
       </div>
     </div>
@@ -111,13 +108,10 @@
       </div>
 
       <div class="flex items-center gap-1.5">
-        <button onclick="apriModaleAutoCompila('mese')" title="Completa automaticamente i turni scoperti del mese selezionato"
+        <!-- Tasto unico Autocompila -->
+        <button onclick="apriModaleAutocompilaScelta()" title="Autocompila mese o intero anno"
           class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
-          Auto-compila mese
-        </button>
-        <button onclick="apriModaleAutoCompila('anno')" title="Completa automaticamente tutti i turni scoperti dell'intero anno"
-          class="px-2.5 py-1 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
-          Auto-compila anno
+          Autocompila
         </button>
         <button onclick="apriModaleSvuota()" class="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-800 border border-red-300 text-xs font-semibold rounded transition-colors">
           Svuota mese
@@ -137,46 +131,61 @@
     </div>
   </main>
 
-  <!-- MODALE CONFERMA AUTO-COMPILAZIONE -->
-  <div id="modal-autocompila" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
+  <!-- MODALE SCELTA AUTOCOMPILA -->
+  <div id="modal-autocompila-scelta" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
     <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
-      <div id="modal-ac-header" class="flex items-center gap-2 text-emerald-700 mb-2">
-        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z"/>
-        </svg>
-        <h3 id="modal-ac-title" class="font-bold text-base">Conferma auto-compilazione</h3>
+      <div class="flex items-center gap-2 text-emerald-700 mb-2">
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>
+        <h3 class="font-bold text-base text-slate-900">Autocompila Turni</h3>
       </div>
-
-      <p id="modal-ac-body" class="text-sm text-slate-600 mb-2"></p>
-      <p class="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 mb-4">
-        Le assegnazioni manuali, i salti (<strong>R</strong>) e le licenze (<strong>L</strong>) già presenti verranno rispettati.
-      </p>
-
+      <p class="text-sm text-slate-600 mb-3">Seleziona l'ambito di compilazione automatica:</p>
+      <div class="space-y-2 mb-4">
+        <label class="flex items-center gap-2.5 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer font-medium text-xs">
+          <input type="radio" name="ambito-ac" value="mese" checked class="text-emerald-700 focus:ring-emerald-600" />
+          <div>
+            <div class="font-bold text-slate-900 text-sm">Mese selezionato</div>
+            <div class="text-slate-500">Compila solo i turni scoperti del mese corrente</div>
+          </div>
+        </label>
+        <label class="flex items-center gap-2.5 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer font-medium text-xs">
+          <input type="radio" name="ambito-ac" value="anno" class="text-indigo-700 focus:ring-indigo-600" />
+          <div>
+            <div class="font-bold text-slate-900 text-sm">Intero anno</div>
+            <div class="text-slate-500">Compila i turni scoperti di tutti i mesi dell'anno</div>
+          </div>
+        </label>
+      </div>
       <div class="flex justify-end gap-2">
-        <button onclick="chiudiModaleAutoCompila()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
-          Annulla
-        </button>
-        <button id="btn-conferma-ac" onclick="confermaAutoCompila()"
-          class="px-4 py-1.5 rounded text-sm font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors">
-          Avvia compilazione
-        </button>
+        <button onclick="chiudiModaleAutocompilaScelta()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">Annulla</button>
+        <button onclick="eseguiAutoCompilaScelto()" class="px-4 py-1.5 rounded text-sm font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors">Avvia</button>
       </div>
     </div>
   </div>
 
-  <!-- MODALE CONFERMA SVUOTA MESE -->
+  <!-- MODALE CONFERMA SVUOTA MESE (CON SCELTA SOLO TURNI / TUTTO) -->
   <div id="modal-svuota" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
     <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
       <div class="flex items-center gap-2 text-red-700 mb-2">
         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
         </svg>
-        <h3 class="font-bold text-base">Conferma svuotamento mese</h3>
+        <h3 class="font-bold text-base">Svuota mese</h3>
       </div>
 
-      <p class="text-sm text-slate-600 mb-3">
-        Stai per cancellare tutti i turni e le licenze (T, TN, UCL, L) per <strong id="modal-svuota-label" class="text-slate-900"></strong>. I salti (R) e gli altri mesi resteranno invariati.
+      <p class="text-sm text-slate-600 mb-2">
+        Stai per svuotare il mese di <strong id="modal-svuota-label" class="text-slate-900"></strong>. I salti (R) resteranno invariati.
       </p>
+
+      <div class="space-y-2 mb-3 bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs font-medium">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="tipo-svuota" value="solo_turni" checked class="text-red-700 focus:ring-red-600" />
+          <span>Svuota <strong>solo i turni</strong> (mantieni le licenze L intatte)</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="tipo-svuota" value="tutto" class="text-red-700 focus:ring-red-600" />
+          <span>Svuota <strong>tutto</strong> (turni e licenze L)</span>
+        </label>
+      </div>
 
       <label class="block text-xs font-semibold text-slate-700 mb-1">
         Per confermare, scrivi la parola <span class="font-mono bg-slate-100 text-red-700 px-1.5 py-0.5 rounded border border-slate-300">svuota</span> qui sotto:
@@ -198,45 +207,54 @@
     </div>
   </div>
 
-  <!-- MODALE RIPRISTINA BACKUP DB -->
-  <div id="modal-restore" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
+  <!-- MODALE GESTISCI DB (BACKUP & RIPRISTINO) -->
+  <div id="modal-gestisci-db" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
     <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
       <div class="flex items-center gap-2 text-amber-700 mb-2">
-        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/>
-        </svg>
-        <h3 class="font-bold text-base text-slate-900">Ripristina Database da Backup</h3>
+        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.554 18 12 18s-8.25-1.847-8.25-4.125v-3.75"/></svg>
+        <h3 class="font-bold text-base text-slate-900">Gestione Database</h3>
+      </div>
+      <p class="text-sm text-slate-600 mb-4">Scegli se scaricare una copia di sicurezza del database o ripristinarne una esistente.</p>
+
+      <div class="space-y-4">
+        <!-- Sezione Backup -->
+        <div class="p-3.5 bg-amber-50/70 border border-amber-200 rounded-lg flex items-center justify-between gap-3">
+          <div>
+            <div class="font-bold text-xs uppercase text-amber-900">Backup Sicuro (WAL-safe)</div>
+            <div class="text-xs text-amber-700">Scarica il file .db aggiornato in tempo reale.</div>
+          </div>
+          <a href="/api/backup" class="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg shadow transition-colors shrink-0">
+            Scarica Backup
+          </a>
+        </div>
+
+        <!-- Sezione Ripristino -->
+        <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-lg">
+          <div class="font-bold text-xs uppercase text-slate-700 mb-1">Ripristina da Backup</div>
+          <div class="text-xs text-slate-500 mb-2.5">Sovrascrive i dati attuali con un file di backup precedente.</div>
+          <input id="input-file-restore" type="file" accept=".db,.sqlite,.sqlite3" onchange="verificaFormRestore()"
+            class="w-full text-xs text-slate-700 file:mr-2 file:py-1 file:px-2.5 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-white hover:file:bg-slate-700 border border-slate-300 rounded p-1 mb-2.5 cursor-pointer" />
+          <label class="block text-[11px] font-semibold text-slate-700 mb-1">
+            Scrivi <span class="font-mono bg-slate-200 text-red-700 px-1 rounded">ripristina</span> per confermare:
+          </label>
+          <input id="input-conferma-restore" type="text" autocomplete="off" placeholder="ripristina" oninput="verificaFormRestore()" onkeydown="if(event.key === 'Enter') eseguiRestoreDB()"
+            class="w-full border border-slate-300 rounded px-2.5 py-1.5 text-xs font-mono mb-3 focus:outline-none focus:ring-2 focus:ring-red-600" />
+          <button id="btn-conferma-restore" onclick="eseguiRestoreDB()" disabled
+            class="w-full py-2 rounded text-xs font-semibold bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-800 transition-opacity">
+            Conferma e Ripristina DB
+          </button>
+        </div>
       </div>
 
-      <p class="text-sm text-slate-600 mb-3">
-        Seleziona un file di backup <code class="bg-slate-100 px-1 rounded text-xs">.db</code> esportato in precedenza. Tutti i dati attuali verranno sovrascritti.
-      </p>
-
-      <input id="input-file-restore" type="file" accept=".db,.sqlite,.sqlite3"
-        onchange="verificaFormRestore()"
-        class="w-full text-xs text-slate-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-800 file:text-white hover:file:bg-slate-700 border border-slate-300 rounded-lg p-1.5 mb-3 cursor-pointer" />
-
-      <label class="block text-xs font-semibold text-slate-700 mb-1">
-        Per confermare la sovrascrittura, scrivi <span class="font-mono bg-slate-100 text-red-700 px-1.5 py-0.5 rounded border border-slate-300">ripristina</span> qui sotto:
-      </label>
-      <input id="input-conferma-restore" type="text" autocomplete="off" placeholder="ripristina"
-        oninput="verificaFormRestore()"
-        onkeydown="if(event.key === 'Enter') eseguiRestoreDB()"
-        class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono mb-4 focus:outline-none focus:ring-2 focus:ring-red-600" />
-
-      <div class="flex justify-end gap-2">
-        <button onclick="chiudiModaleRestore()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
-          Annulla
-        </button>
-        <button id="btn-conferma-restore" onclick="eseguiRestoreDB()" disabled
-          class="px-4 py-1.5 rounded text-sm font-semibold bg-red-700 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-red-800 transition-opacity">
-          Carica e ripristina
+      <div class="flex justify-end mt-4">
+        <button onclick="chiudiModaleGestisciDB()" class="px-4 py-1.5 rounded text-sm font-semibold bg-slate-200 hover:bg-slate-300 text-slate-800">
+          Chiudi
         </button>
       </div>
     </div>
   </div>
 
-  <!-- MODALE NOTIFICA / AVVISO CUSTOM (SOSTITUISCE ALERT NATIVO) -->
+  <!-- MODALE NOTIFICA / AVVISO CUSTOM -->
   <div id="modal-alert" class="fixed inset-0 bg-slate-900/60 hidden items-center justify-center z-50 p-4 no-print">
     <div class="bg-white rounded-xl shadow-xl border border-slate-200 max-w-sm w-full p-5">
       <div id="modal-alert-header" class="flex items-center gap-2 text-slate-800 mb-2">
@@ -339,10 +357,6 @@
   </main>
 
   <script>
-    // Cicli contestuali al tipo di giorno:
-    // - Turno Notturno (N): include TN
-    // - Turno Diurno (D) / altri giorni: esclude TN
-    // - Salto (R): solo straordinari (T, TN se notte, UCL), mai L
     const CICLO_NOTTE_NORMALE = ["", "T", "TN", "UCL", "L"];
     const CICLO_NOTTE_SALTO   = ["", "T", "TN", "UCL"];
     const CICLO_DIURNO_NORMALE = ["", "T", "UCL", "L"];
@@ -360,7 +374,6 @@
     };
 
     let statoTurnario = null;
-    let ambitoAutoCompilaCorrente = "mese";
 
     function mostraAlert(titolo, messaggio, tipo = "error") {
       const header = document.getElementById("modal-alert-header");
@@ -390,9 +403,9 @@
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
-        chiudiModaleAutoCompila();
+        chiudiModaleAutocompilaScelta();
         chiudiModaleSvuota();
-        chiudiModaleRestore();
+        chiudiModaleGestisciDB();
         chiudiAlert();
       }
     });
@@ -440,127 +453,55 @@
       caricaTurnario();
     }
 
-    function apriModaleAutoCompila(ambito) {
-      ambitoAutoCompilaCorrente = ambito;
-      const anno = document.getElementById("input-anno").value;
-      const selMese = document.getElementById("select-mese");
-      const nomeMese = selMese.options[selMese.selectedIndex].text;
-
-      const header = document.getElementById("modal-ac-header");
-      const title = document.getElementById("modal-ac-title");
-      const body = document.getElementById("modal-ac-body");
-      const btn = document.getElementById("btn-conferma-ac");
-
-      if (ambito === "anno") {
-        header.className = "flex items-center gap-2 text-indigo-700 mb-2";
-        title.textContent = `Auto-compila anno ${anno}`;
-        body.innerHTML = `Vuoi compilare automaticamente tutti i turni scoperti dell'intero anno <strong class="text-slate-900">${anno}</strong>?`;
-        btn.className = "px-4 py-1.5 rounded text-sm font-semibold bg-indigo-700 hover:bg-indigo-800 text-white transition-colors";
-      } else {
-        header.className = "flex items-center gap-2 text-emerald-700 mb-2";
-        title.textContent = `Auto-compila ${nomeMese} ${anno}`;
-        body.innerHTML = `Vuoi compilare automaticamente i turni scoperti di <strong class="text-slate-900">${nomeMese} ${anno}</strong>?`;
-        btn.className = "px-4 py-1.5 rounded text-sm font-semibold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors";
-      }
-
-      btn.disabled = false;
-      btn.textContent = "Avvia compilazione";
-
-      const modal = document.getElementById("modal-autocompila");
+    // --- MODALE AUTOCOMPILA ---
+    function apriModaleAutocompilaScelta() {
+      const modal = document.getElementById("modal-autocompila-scelta");
       modal.classList.remove("hidden");
       modal.classList.add("flex");
-      setTimeout(() => btn.focus(), 30);
     }
 
-    function chiudiModaleAutoCompila() {
-      const modal = document.getElementById("modal-autocompila");
+    function chiudiModaleAutocompilaScelta() {
+      const modal = document.getElementById("modal-autocompila-scelta");
       modal.classList.add("hidden");
       modal.classList.remove("flex");
     }
 
-    async function confermaAutoCompila() {
+    async function eseguiAutoCompilaScelto() {
+      const ambito = document.querySelector('input[name="ambito-ac"]:checked').value;
       const anno = document.getElementById("input-anno").value;
       const mese = document.getElementById("select-mese").value;
-      const btn = document.getElementById("btn-conferma-ac");
 
-      btn.disabled = true;
-      btn.textContent = "Compilazione in corso...";
+      chiudiModaleAutocompilaScelta();
 
-      const url = ambitoAutoCompilaCorrente === "anno"
+      const url = ambito === "anno"
         ? `/api/autocompila/${anno}`
         : `/api/autocompila/${anno}/${mese}`;
 
       try {
         const res = await fetch(url, { method: "POST" });
         if (res.ok) {
-          chiudiModaleAutoCompila();
           await caricaTurnario();
         } else {
-          chiudiModaleAutoCompila();
           mostraAlert("Errore", "Impossibile completare l'auto-compilazione.", "error");
         }
       } catch (e) {
-        chiudiModaleAutoCompila();
         mostraAlert("Errore di rete", "Connessione al server non riuscita.", "error");
       }
     }
 
-    function apriModaleSvuota() {
-      const selMese = document.getElementById("select-mese");
-      const nomeMese = selMese.options[selMese.selectedIndex].text;
-      const anno = document.getElementById("input-anno").value;
-
-      document.getElementById("modal-svuota-label").textContent = `${nomeMese} ${anno}`;
-      const inp = document.getElementById("input-conferma-svuota");
-      inp.value = "";
-      document.getElementById("btn-conferma-svuota").disabled = true;
-
-      const modal = document.getElementById("modal-svuota");
-      modal.classList.remove("hidden");
-      modal.classList.add("flex");
-      setTimeout(() => inp.focus(), 50);
-    }
-
-    function chiudiModaleSvuota() {
-      const modal = document.getElementById("modal-svuota");
-      modal.classList.add("hidden");
-      modal.classList.remove("flex");
-    }
-
-    function verificaParolaSvuota() {
-      const val = document.getElementById("input-conferma-svuota").value.trim().toLowerCase();
-      document.getElementById("btn-conferma-svuota").disabled = (val !== "svuota");
-    }
-
-    async function eseguiSvuotaMese() {
-      const val = document.getElementById("input-conferma-svuota").value.trim().toLowerCase();
-      if (val !== "svuota") return;
-
-      const anno = document.getElementById("input-anno").value;
-      const mese = document.getElementById("select-mese").value;
-
-      const res = await fetch(`/api/turnario/${anno}/${mese}`, { method: "DELETE" });
-      if (res.ok) {
-        chiudiModaleSvuota();
-        caricaTurnario();
-      } else {
-        chiudiModaleSvuota();
-        mostraAlert("Errore", "Errore durante lo svuotamento del mese.", "error");
-      }
-    }
-
-    function apriModaleRestore() {
+    // --- MODALE GESTISCI DB ---
+    function apriModaleGestisciDB() {
       document.getElementById("input-file-restore").value = "";
       document.getElementById("input-conferma-restore").value = "";
       document.getElementById("btn-conferma-restore").disabled = true;
 
-      const modal = document.getElementById("modal-restore");
+      const modal = document.getElementById("modal-gestisci-db");
       modal.classList.remove("hidden");
       modal.classList.add("flex");
     }
 
-    function chiudiModaleRestore() {
-      const modal = document.getElementById("modal-restore");
+    function chiudiModaleGestisciDB() {
+      const modal = document.getElementById("modal-gestisci-db");
       modal.classList.add("hidden");
       modal.classList.remove("flex");
     }
@@ -591,21 +532,67 @@
         });
 
         if (res.ok) {
-          chiudiModaleRestore();
+          chiudiModaleGestisciDB();
           mostraAlert("Ripristino completato", "Il database è stato ripristinato con successo dal file di backup.", "success");
           caricaTurnario();
           caricaDipendenti();
         } else {
           const err = await res.json();
-          chiudiModaleRestore();
           mostraAlert("Errore ripristino", err.detail || "File di backup non valido.", "error");
         }
       } catch (e) {
-        chiudiModaleRestore();
         mostraAlert("Errore di rete", "Connessione al server non riuscita durante il ripristino.", "error");
       } finally {
-        btn.textContent = "Carica e ripristina";
+        btn.textContent = "Conferma e Ripristina DB";
         verificaFormRestore();
+      }
+    }
+
+    // --- MODALE SVUOTA MESE ---
+    function apriModaleSvuota() {
+      const selMese = document.getElementById("select-mese");
+      const nomeMese = selMese.options[selMese.selectedIndex].text;
+      const anno = document.getElementById("input-anno").value;
+
+      document.getElementById("modal-svuota-label").textContent = `${nomeMese} ${anno}`;
+      const inp = document.getElementById("input-conferma-svuota");
+      inp.value = "";
+      document.querySelector('input[name="tipo-svuota"][value="solo_turni"]').checked = true;
+      document.getElementById("btn-conferma-svuota").disabled = true;
+
+      const modal = document.getElementById("modal-svuota");
+      modal.classList.remove("hidden");
+      modal.classList.add("flex");
+      setTimeout(() => inp.focus(), 50);
+    }
+
+    function chiudiModaleSvuota() {
+      const modal = document.getElementById("modal-svuota");
+      modal.classList.add("hidden");
+      modal.classList.remove("flex");
+    }
+
+    function verificaParolaSvuota() {
+      const val = document.getElementById("input-conferma-svuota").value.trim().toLowerCase();
+      document.getElementById("btn-conferma-svuota").disabled = (val !== "svuota");
+    }
+
+    async function eseguiSvuotaMese() {
+      const val = document.getElementById("input-conferma-svuota").value.trim().toLowerCase();
+      if (val !== "svuota") return;
+
+      const anno = document.getElementById("input-anno").value;
+      const mese = document.getElementById("select-mese").value;
+      const tipoSvuota = document.querySelector('input[name="tipo-svuota"]:checked').value;
+      const soloTurni = (tipoSvuota === "solo_turni");
+
+      const res = await fetch(`/api/turnario/${anno}/${mese}?solo_turni=${soloTurni}`, { method: "DELETE" });
+      if (res.ok) {
+        chiudiModaleSvuota();
+        caricaTurnario();
+      } else {
+        chiudiModaleSvuota();
+        mostraAlert("Errore", "Errore durante lo svuotamento del mese.", "error");
       }
     }
 
@@ -992,12 +979,12 @@
       e.preventDefault();
       const nome = document.getElementById("new-nome").value;
       const qualifica = document.getElementById("new-qualifica").value;
-      const responsabile = qualifica === "Q" ? document.getElementById("new-responsabile").checked : false;
+      const responsable = qualifica === "Q" ? document.getElementById("new-responsabile").checked : false;
       const salto = document.getElementById("new-salto").value;
       const res = await fetch("/api/dipendenti", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, qualifica, responsabile, salto })
+        body: JSON.stringify({ nome, qualifica, responsable, salto })
       });
       if (res.ok) {
         document.getElementById("new-nome").value = "";
@@ -1022,7 +1009,7 @@
       await fetch(`/api/dipendenti/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responsabile: isResponsabile })
+        body: JSON.stringify({ responsable: isResponsabile })
       });
       caricaDipendenti();
     }

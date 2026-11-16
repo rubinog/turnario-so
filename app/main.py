@@ -127,7 +127,6 @@ def init_db():
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_assegnazioni_data ON assegnazioni(data);")
 
-        # Bonifica automatica: converte eventuali 'TN' assegnati per errore su giorni non notturni in 'T'
         tn_rows = conn.execute("SELECT id, data FROM assegnazioni WHERE mansione = 'TN'").fetchall()
         ids_da_convertire = []
         for r in tn_rows:
@@ -147,13 +146,6 @@ def startup_event():
 
 
 def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int] = None) -> int:
-    """
-    Compila automaticamente i turni scoperti (min 2 Q + 4 V):
-    - Sul turno Diurno (D): tutti i presenti ricevono 'T' (o restano con la mansione già inserita).
-    - Sul turno Notturno (N): 1 Q e 1 V ricevono 'TN', gli altri 'T'.
-    - Fase 1: priorità a chi è libero su entrambi i giorni consecutivi (D + N).
-    - Fase 2 (fallback): completa eventuali buchi su singolo giorno dovuti a ferie alternate.
-    """
     dipendenti = [
         dict(r) for r in conn.execute(
             "SELECT id, nome, salto, qualifica, responsabile FROM dipendenti WHERE attivo = 1"
@@ -231,7 +223,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
         date_blocco = [b["data"] for b in blocco]
         blocco_ha_notte = any(b["tipo_sez_d"] == "N" for b in blocco)
 
-        # --- FASE 1: Copertura con continuità sull'intero blocco (D + N) ---
         gia_q_t, gia_q_tn = set(), set()
         gia_v_t, gia_v_tn = set(), set()
 
@@ -261,7 +252,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
         scelti_q_tn = list(gia_q_tn)
         scelti_q_t = list(gia_q_t)
 
-        # Sceglie 1 Q per il notturno SOLO se il blocco include una notte (N)
         if blocco_ha_notte and len(scelti_q_tn) < 1 and disp_q:
             candidati_q_tn = sorted(
                 disp_q,
@@ -283,7 +273,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
         scelti_v_tn = list(gia_v_tn)
         scelti_v_t = list(gia_v_t)
 
-        # Sceglie 1 V per il notturno SOLO se il blocco include una notte (N)
         if blocco_ha_notte and len(scelti_v_tn) < 1 and disp_v:
             candidati_v_tn = sorted(
                 disp_v,
@@ -302,7 +291,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             scelti_v_t.append(scelto["id"])
             disp_v.remove(scelto)
 
-        # Assegna 'TN' esclusivamente sul giorno Notturno (N) e 'T' sul giorno Diurno (D)
         for b_info in blocco:
             dt = b_info["data"]
             is_notte = (b_info["tipo_sez_d"] == "N")
@@ -311,7 +299,6 @@ def auto_compila_periodo(conn: sqlite3.Connection, anno: int, mese: Optional[int
             for did in scelti_q_t + scelti_v_t:
                 registra(did, dt, "T")
 
-        # --- FASE 2 (Fallback): Copertura singolo giorno se restano buchi per licenze alternate ---
         for b_info in blocco:
             dt = b_info["data"]
             is_notte = (b_info["tipo_sez_d"] == "N")
@@ -415,7 +402,6 @@ class AssegnazioneInput(BaseModel):
 
 @app.get("/api/backup")
 def scarica_backup_db(background_tasks: BackgroundTasks):
-    """Crea una copia consistente (WAL-safe) del database SQLite e la invia in download."""
     if not DB_PATH.exists():
         raise HTTPException(status_code=404, detail="Database non trovato")
 
@@ -443,7 +429,6 @@ def scarica_backup_db(background_tasks: BackgroundTasks):
 
 @app.post("/api/restore")
 async def ripristina_backup_db(file: UploadFile = File(...)):
-    """Valida e ripristina in modo atomico (WAL-safe) un file di backup SQLite."""
     contenuto = await file.read()
     if len(contenuto) < 100 or not contenuto.startswith(b"SQLite format 3\x00"):
         raise HTTPException(status_code=400, detail="Il file selezionato non è un database SQLite valido.")
@@ -559,7 +544,7 @@ def autocompila_mese(anno: int, mese: int):
 
 
 @app.delete("/api/turnario/{anno}/{mese}")
-def svuota_turnario_mensile(anno: int, mese: int):
+def svuota_turnario_mensile(anno: int, mese: int, solo_turni: bool = False):
     if not (1 <= mese <= 12):
         raise HTTPException(status_code=400, detail="Mese non valido")
 
@@ -568,10 +553,16 @@ def svuota_turnario_mensile(anno: int, mese: int):
     data_fine = f"{anno:04d}-{mese:02d}-{num_giorni:02d}"
 
     with get_db() as conn:
-        cur = conn.execute(
-            "DELETE FROM assegnazioni WHERE data BETWEEN ? AND ?",
-            (data_inizio, data_fine)
-        )
+        if solo_turni:
+            cur = conn.execute(
+                "DELETE FROM assegnazioni WHERE data BETWEEN ? AND ? AND mansione IN ('T', 'TN', 'UCL')",
+                (data_inizio, data_fine)
+            )
+        else:
+            cur = conn.execute(
+                "DELETE FROM assegnazioni WHERE data BETWEEN ? AND ?",
+                (data_inizio, data_fine)
+            )
     return {"status": "ok", "eliminati": cur.rowcount}
 
 
@@ -584,7 +575,6 @@ def salva_assegnazione(payload: AssegnazioneInput):
 
     info_giorno = calcola_turno_giorno(d)
 
-    # TN consentito esclusivamente nei giorni con turno Notturno (N) della Sezione D
     if payload.mansione == "TN" and info_giorno["tipo_sez_d"] != "N":
         raise HTTPException(
             status_code=400,
@@ -710,7 +700,6 @@ def aggiorna_dipendente(dipendente_id: int, payload: DipendenteUpdate):
     return {"status": "ok"}
 
 
-# Serve frontend statico
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
