@@ -28,6 +28,22 @@
     thead th.sticky-col {
       z-index: 40;
     }
+
+    /* Evidenziazione mirino riga/colonna/cella */
+    td.hl-cross {
+      box-shadow: inset 0 0 0 9999px rgba(14, 165, 233, 0.14);
+    }
+    td.sticky-col.hl-cross {
+      background-color: #e0f2fe !important;
+      color: #0369a1;
+    }
+    th.hl-col-head {
+      box-shadow: inset 0 -3px 0 0 #38bdf8, inset 0 0 0 9999px rgba(56, 189, 248, 0.22);
+    }
+    td.hl-active {
+      box-shadow: inset 0 0 0 2px #0284c7, inset 0 0 0 9999px rgba(14, 165, 233, 0.22) !important;
+    }
+
     @media print {
       @page { size: landscape; margin: 6mm; }
       .no-print { display: none !important; }
@@ -56,7 +72,6 @@
           Elenco Dipendenti & Conteggi
         </button>
         <span class="border-l border-red-600 h-4 mx-0.5"></span>
-        <!-- Tasto unico Gestisci DB -->
         <button onclick="apriModaleGestisciDB()" title="Gestione Database (Backup e Ripristino)"
           class="px-3 py-1 rounded font-semibold text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 shadow transition-colors">
           Gestisci DB
@@ -67,7 +82,7 @@
 
   <!-- SEZIONE 1: CALENDARIO MENSILE -->
   <main id="view-turnario" class="p-2">
-    <!-- Barra controlli mese/anno + legenda compatta -->
+    <!-- Barra controlli mese/anno + selettore puntatore + legenda compatta -->
     <div class="bg-white px-3 py-1.5 rounded-lg shadow-sm border border-slate-200 mb-2 flex flex-wrap items-center justify-between gap-2 no-print">
       <div class="flex items-center gap-1.5">
         <button onclick="cambiaMese(-1)" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 rounded font-bold text-xs">&larr;</button>
@@ -88,6 +103,17 @@
         <input id="input-anno" type="number" value="2027" min="2020" max="2050" onchange="caricaTurnario()"
           class="border border-slate-300 rounded px-2 py-1 w-20 font-semibold text-xs text-center" />
         <button onclick="cambiaMese(1)" class="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 rounded font-bold text-xs">&rarr;</button>
+
+        <!-- Selettore modalità evidenziazione puntatore -->
+        <div class="flex items-center gap-1 ml-1.5 pl-2 border-l border-slate-300" title="Scegli come evidenziare le celle al passaggio del mouse">
+          <span class="text-[11px] font-semibold text-slate-500">Mirino:</span>
+          <select id="select-highlight-mode" onchange="cambiaModalitaHighlight(this.value)"
+            class="border border-slate-300 rounded px-2 py-1 text-xs font-semibold bg-slate-50 text-slate-700 cursor-pointer">
+            <option value="cross">Riga + Colonna</option>
+            <option value="cell">Solo Cella</option>
+            <option value="none">Disattivato</option>
+          </select>
+        </div>
       </div>
 
       <!-- Legenda rapida -->
@@ -108,7 +134,6 @@
       </div>
 
       <div class="flex items-center gap-1.5">
-        <!-- Tasto unico Autocompila -->
         <button onclick="apriModaleAutocompilaScelta()" title="Autocompila mese o intero anno"
           class="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold rounded transition-colors shadow-xs">
           Autocompila
@@ -217,7 +242,6 @@
       <p class="text-sm text-slate-600 mb-4">Scegli se scaricare una copia di sicurezza del database o ripristinarne una esistente.</p>
 
       <div class="space-y-4">
-        <!-- Sezione Backup -->
         <div class="p-3.5 bg-amber-50/70 border border-amber-200 rounded-lg flex items-center justify-between gap-3">
           <div>
             <div class="font-bold text-xs uppercase text-amber-900">Backup Sicuro (WAL-safe)</div>
@@ -228,7 +252,6 @@
           </a>
         </div>
 
-        <!-- Sezione Ripristino -->
         <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-lg">
           <div class="font-bold text-xs uppercase text-slate-700 mb-1">Ripristina da Backup</div>
           <div class="text-xs text-slate-500 mb-2.5">Sovrascrive i dati attuali con un file di backup precedente.</div>
@@ -374,6 +397,47 @@
     };
 
     let statoTurnario = null;
+    let modalitaHighlight = localStorage.getItem("turnario_highlight_mode") || "cross";
+
+    function initHighlightSelector() {
+      const sel = document.getElementById("select-highlight-mode");
+      if (sel) sel.value = modalitaHighlight;
+    }
+
+    function cambiaModalitaHighlight(nuovaModalita) {
+      modalitaHighlight = nuovaModalita;
+      localStorage.setItem("turnario_highlight_mode", nuovaModalita);
+      pulisciEvidenziazione();
+    }
+
+    function pulisciEvidenziazione() {
+      document.querySelectorAll(".hl-cross, .hl-active, .hl-col-head").forEach(el => {
+        el.classList.remove("hl-cross", "hl-active", "hl-col-head");
+      });
+    }
+
+    function evidenziaCella(tdEl) {
+      pulisciEvidenziazione();
+      if (modalitaHighlight === "none" || !tdEl) return;
+
+      tdEl.classList.add("hl-active");
+
+      if (modalitaHighlight === "cross") {
+        const tr = tdEl.parentElement;
+        if (tr) {
+          tr.querySelectorAll("td").forEach(cell => cell.classList.add("hl-cross"));
+        }
+        const colIdx = tdEl.dataset.col;
+        if (colIdx !== undefined) {
+          document.querySelectorAll(`#turnario-body td[data-col="${colIdx}"]`).forEach(cell => {
+            cell.classList.add("hl-cross");
+          });
+          document.querySelectorAll(`#turnario-head th[data-col="${colIdx}"]`).forEach(th => {
+            th.classList.add("hl-col-head");
+          });
+        }
+      }
+    }
 
     function mostraAlert(titolo, messaggio, tipo = "error") {
       const header = document.getElementById("modal-alert-header");
@@ -730,7 +794,7 @@
       let row1 = `<tr><th class="sticky-col bg-slate-800 text-white px-2.5 py-1.5 text-left border border-slate-600 w-[255px]">Operatore</th>`;
       let row2 = `<tr><th class="sticky-col bg-slate-700 text-slate-200 px-2.5 py-1 text-left border border-slate-600 text-[10.5px]">Copertura: 2 Q + 4 V</th>`;
 
-      giorni.forEach(g => {
+      giorni.forEach((g, idx) => {
         const isSezD = Boolean(g.turno_sez_d);
         const cop = isSezD ? calcolaCoperturaGiorno(g.data) : null;
 
@@ -744,8 +808,8 @@
 
         const gg = String(g.giorno).padStart(2, "0");
 
-        row1 += `<th id="h1-${g.data}" class="${bgH1} px-0.5 py-1.5 text-center border border-slate-400 text-xs">${gg}</th>`;
-        row2 += `<th id="h2-${g.data}" class="${bgH2} px-0.5 py-1 text-center border border-slate-300">${renderBadgeCopertura(g)}</th>`;
+        row1 += `<th id="h1-${g.data}" data-col="${idx}" class="${bgH1} px-0.5 py-1.5 text-center border border-slate-400 text-xs transition-shadow">${gg}</th>`;
+        row2 += `<th id="h2-${g.data}" data-col="${idx}" class="${bgH2} px-0.5 py-1 text-center border border-slate-300 transition-shadow">${renderBadgeCopertura(g)}</th>`;
       });
       row1 += "</tr>";
       row2 += "</tr>";
@@ -766,9 +830,9 @@
           ? `Responsabile Sala: escluso dal confronto min/max dei turni totali`
           : `Totale Turni (T + TN + UCL) fino a questo mese`;
 
-        rowsHtml += `<tr class="hover:bg-slate-50 h-8">`;
+        rowsHtml += `<tr class="h-8">`;
         rowsHtml += `
-          <td class="sticky-col bg-white px-2.5 py-1.5 font-semibold text-slate-800 border border-slate-300">
+          <td class="sticky-col bg-white px-2.5 py-1.5 font-semibold text-slate-800 border border-slate-300 transition-colors">
             <div class="flex items-center justify-between gap-1.5">
               <div class="flex items-center gap-1.5 min-w-0">
                 ${qBadge}
@@ -781,7 +845,7 @@
             </div>
           </td>`;
 
-        giorni.forEach(g => {
+        giorni.forEach((g, idx) => {
           const isSezD = Boolean(g.turno_sez_d);
           const isNotte = g.tipo_sez_d === "N";
           const isSalto = g.turno_sez_d === dip.salto;
@@ -789,8 +853,8 @@
           const val = assegnazioni[key] || "";
 
           const cellBg = isSalto
-            ? "bg-amber-100 hover:bg-amber-200"
-            : (isSezD ? "bg-amber-50/70 hover:bg-amber-100" : "bg-white hover:bg-slate-100");
+            ? "bg-amber-100"
+            : (isSezD ? "bg-amber-50/70" : "bg-white");
 
           let titleText;
           if (isSalto) {
@@ -805,9 +869,11 @@
 
           rowsHtml += `
             <td onclick="ciclaCella(${dip.id}, '${g.data}', ${isSalto}, ${isNotte}, this)"
+              onmouseenter="evidenziaCella(this)"
+              data-col="${idx}"
               data-val="${val}"
               title="${titleText}"
-              class="${cellBg} border border-slate-300 text-center py-1.5 cursor-pointer transition-colors">
+              class="${cellBg} border border-slate-300 text-center py-1.5 cursor-pointer">
               ${renderContenutoCella(val, isSalto)}
             </td>`;
         });
@@ -815,6 +881,7 @@
       });
 
       tbody.innerHTML = rowsHtml;
+      tbody.onmouseleave = pulisciEvidenziazione;
       aggiornaBadgeOperatori();
     }
 
@@ -827,10 +894,12 @@
       const h2 = document.getElementById(`h2-${dataStr}`);
 
       if (h1) {
-        h1.className = `${cop.completo ? "bg-emerald-700 text-white" : "bg-red-700 text-white"} px-0.5 py-1.5 text-center border border-slate-400 text-xs`;
+        const keepHl = h1.classList.contains("hl-col-head") ? " hl-col-head" : "";
+        h1.className = `${cop.completo ? "bg-emerald-700 text-white" : "bg-red-700 text-white"} px-0.5 py-1.5 text-center border border-slate-400 text-xs transition-shadow${keepHl}`;
       }
       if (h2) {
-        h2.className = `${cop.completo ? "bg-emerald-200 border-emerald-400" : "bg-red-200 border-red-400"} px-0.5 py-1 text-center border border-slate-300`;
+        const keepHl = h2.classList.contains("hl-col-head") ? " hl-col-head" : "";
+        h2.className = `${cop.completo ? "bg-emerald-200 border-emerald-400" : "bg-red-200 border-red-400"} px-0.5 py-1 text-center border border-slate-300 transition-shadow${keepHl}`;
         h2.innerHTML = renderBadgeCopertura(g);
       }
     }
@@ -979,12 +1048,12 @@
       e.preventDefault();
       const nome = document.getElementById("new-nome").value;
       const qualifica = document.getElementById("new-qualifica").value;
-      const responsable = qualifica === "Q" ? document.getElementById("new-responsabile").checked : false;
+      const responsabile = qualifica === "Q" ? document.getElementById("new-responsabile").checked : false;
       const salto = document.getElementById("new-salto").value;
       const res = await fetch("/api/dipendenti", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nome, qualifica, responsable, salto })
+        body: JSON.stringify({ nome, qualifica, responsabile, salto })
       });
       if (res.ok) {
         document.getElementById("new-nome").value = "";
@@ -1009,7 +1078,7 @@
       await fetch(`/api/dipendenti/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ responsable: isResponsabile })
+        body: JSON.stringify({ responsabile: isResponsabile })
       });
       caricaDipendenti();
     }
@@ -1032,6 +1101,7 @@
       caricaDipendenti();
     }
 
+    initHighlightSelector();
     caricaTurnario();
   </script>
 </body>
